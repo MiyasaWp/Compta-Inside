@@ -8,7 +8,12 @@ export default async function handler(req, res) {
 
   const companyId = token.companyId;
 
-  // CTE helper (DRY)
+  // Type d'entreprise
+  const [companyRow] = await sql`
+    SELECT COALESCE(company_type, 'cafe') AS company_type FROM companies WHERE id = ${companyId}
+  `;
+  const isGarage = companyRow?.company_type === 'garage';
+
   async function computeTotalSinceLast() {
     const [lastPayRow] = await sql`
       SELECT COALESCE(MAX(paid_at), '1970-01-01T00:00:00Z'::timestamptz) AS last_paid
@@ -16,33 +21,50 @@ export default async function handler(req, res) {
     `;
     const lastPaid = lastPayRow.last_paid;
 
-    const [totalRow] = await sql`
-      WITH avg_prices AS (
-        SELECT raw_material_id,
-               SUM(total_amount) / NULLIF(SUM(quantity), 0) AS avg_unit_price
-        FROM purchases
-        WHERE company_id = ${companyId} AND raw_material_id IS NOT NULL
-        GROUP BY raw_material_id
-      ),
-      product_costs AS (
-        SELECT pr.product_id,
-               COALESCE(SUM(pr.quantity_per_unit * COALESCE(ap.avg_unit_price, 0)), 0) AS cost_price
-        FROM product_recipes pr
-        LEFT JOIN avg_prices ap ON ap.raw_material_id = pr.raw_material_id
-        WHERE pr.company_id = ${companyId}
-        GROUP BY pr.product_id
-      )
-      SELECT COALESCE(SUM(
-        GREATEST(0, s.total_amount - s.quantity::float * COALESCE(pc.cost_price, 0))
-        * u.salary_percent / 100
-      ), 0)::float AS total
-      FROM sales s
-      JOIN  users u ON u.id = s.employee_id
-      LEFT JOIN product_costs pc ON pc.product_id = s.product_id
-      WHERE s.company_id = ${companyId}
-        AND s.sale_date  > ${lastPaid}
-    `;
-    return { total: totalRow.total, lastPaid };
+    let total = 0;
+
+    if (isGarage) {
+      // Garage : salaire = grand_total × salary_percent (pas de coût matières)
+      const [totalRow] = await sql`
+        SELECT COALESCE(SUM(gq.grand_total * u.salary_percent / 100), 0)::float AS total
+        FROM garage_quotes gq
+        JOIN users u ON u.id = gq.employee_id
+        WHERE gq.company_id = ${companyId}
+          AND gq.created_at > ${lastPaid}
+      `;
+      total = totalRow.total;
+    } else {
+      // Café : salaire = marge × salary_percent
+      const [totalRow] = await sql`
+        WITH avg_prices AS (
+          SELECT raw_material_id,
+                 SUM(total_amount) / NULLIF(SUM(quantity), 0) AS avg_unit_price
+          FROM purchases
+          WHERE company_id = ${companyId} AND raw_material_id IS NOT NULL
+          GROUP BY raw_material_id
+        ),
+        product_costs AS (
+          SELECT pr.product_id,
+                 COALESCE(SUM(pr.quantity_per_unit * COALESCE(ap.avg_unit_price, 0)), 0) AS cost_price
+          FROM product_recipes pr
+          LEFT JOIN avg_prices ap ON ap.raw_material_id = pr.raw_material_id
+          WHERE pr.company_id = ${companyId}
+          GROUP BY pr.product_id
+        )
+        SELECT COALESCE(SUM(
+          GREATEST(0, s.total_amount - s.quantity::float * COALESCE(pc.cost_price, 0))
+          * u.salary_percent / 100
+        ), 0)::float AS total
+        FROM sales s
+        JOIN  users u ON u.id = s.employee_id
+        LEFT JOIN product_costs pc ON pc.product_id = s.product_id
+        WHERE s.company_id = ${companyId}
+          AND s.sale_date  > ${lastPaid}
+      `;
+      total = totalRow.total;
+    }
+
+    return { total, lastPaid };
   }
 
   // ── GET ───────────────────────────────────────────────────────
@@ -65,7 +87,6 @@ export default async function handler(req, res) {
       ORDER BY sp.paid_at DESC LIMIT 10
     `;
 
-    // isPaid = aucune vente depuis le dernier paiement (total = 0)
     return res.status(200).json({
       lastPaid,
       isPaid:     total <= 0 && !!lastEntry,
@@ -87,7 +108,6 @@ export default async function handler(req, res) {
     weekStart.setHours(0, 0, 0, 0);
     const weekStartStr = weekStart.toISOString().split('T')[0];
 
-    // Clé unique : company + timestamp (pas week, pour permettre plusieurs paiements/semaine)
     await sql`
       INSERT INTO salary_payments (company_id, week_start, total_amount, paid_by)
       VALUES (${companyId}, ${weekStartStr}, ${total}, ${parseInt(token.sub)})
