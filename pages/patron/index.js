@@ -566,6 +566,13 @@ export default function PatronDashboard() {
   const toggleDevisPerf   = (p) => setDevisSelPerfs(s => { const n=new Set(s); n.has(p)?n.delete(p):n.add(p); return n; });
   const toggleDevisCustom = (c) => setDevisSelCustoms(s => { const n=new Set(s); n.has(c)?n.delete(c):n.add(c); return n; });
   const toggleDvisPaint   = (p) => setDevisSelPaints(s => { const n=new Set(s); n.has(p)?n.delete(p):n.add(p); return n; });
+  const deleteQuote = async (id) => {
+    if (!confirm('Supprimer ce devis ? Cette action est irréversible.')) return;
+    const r = await fetch(`/api/garage/devis?id=${id}`, { method: 'DELETE' });
+    if (r.ok) { showToast('Devis supprimé'); setGarageQuotes(q => q.filter(x => x.id !== id)); }
+    else showToast('Erreur lors de la suppression', 'error');
+  };
+
   const resetDevis = () => {
     setDevisClient({firstName:'',lastName:'',model:'',category:'Sport'});
     setDevisSelPerfs(new Set()); setDevisSelCustoms(new Set()); setDevisSelPaints(new Set());
@@ -2088,8 +2095,14 @@ export default function PatronDashboard() {
                                 📝 {q.notes}
                               </div>
                             )}
-                            <div style={{ marginTop:12, fontSize:12, color:'#604080' }}>
-                              Employé: {q.employee_name || '—'} · Enregistré le {new Date(q.created_at).toLocaleString('fr-FR')}
+                            <div style={{ marginTop:12, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                              <div style={{ fontSize:12, color:'#604080' }}>
+                                Employé: {q.employee_name || '—'} · Enregistré le {new Date(q.created_at).toLocaleString('fr-FR')}
+                              </div>
+                              <button onClick={e => { e.stopPropagation(); deleteQuote(q.id); }}
+                                style={{ padding:'5px 14px', borderRadius:8, border:'1px solid rgba(220,50,50,0.4)', background:'rgba(220,50,50,0.1)', color:'#f87171', cursor:'pointer', fontSize:12, fontWeight:600 }}>
+                                🗑️ Supprimer
+                              </button>
                             </div>
                           </div>
                         )}
