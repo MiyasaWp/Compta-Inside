@@ -2105,8 +2105,6 @@ export default function PatronDashboard() {
               ONGLET : MON COMPTE
           ══════════════════════════════════════════ */}
           {tab === 'compte' && (
-          ══════════════════════════════════════════ */}
-          {tab === 'compte' && (
             <div style={{ maxWidth: 480, margin: '0 auto' }}>
               <h2 style={S.sectionTitle}>⚙️ Mon compte</h2>
 
