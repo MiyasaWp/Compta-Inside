@@ -3,6 +3,50 @@ import { useRouter } from 'next/router';
 import { useEffect, useState, useCallback } from 'react';
 import Head from 'next/head';
 
+
+// ─── Grille tarifaire Garage (Piers 76) ─────────────────────────────────────
+const GARAGE_CATEGORIES = ['Compacts','Sedans','Coupés','Motos','Muscle','SUV','Sport','Sports classic','Super'];
+const GARAGE_PERF_PRICES = {
+  'Moteur 1':[2000,2500,6000,9500,12500,20000,50000,60000,110000],
+  'Moteur 2':[3000,5000,8000,13000,15000,30000,60000,75000,120000],
+  'Moteur 3':[5000,8000,20000,20000,25000,50000,80000,85000,130000],
+  'Moteur 4':[10000,15000,35000,45000,40000,65000,95000,98000,140000],
+  'Moteur 5':[20000,35000,60000,75000,80000,90000,125000,110000,150000],
+  'Turbo':[50000,60000,75000,95000,120000,140000,160000,160000,200000],
+  'Transmission 1':[8000,10000,10000,25000,25000,35000,40000,40000,50000],
+  'Transmission 2':[12000,15000,15000,35000,35000,45000,55000,55000,60000],
+  'Transmission 3':[15000,25000,25000,42500,42500,56000,62500,62500,75000],
+  'Transmission 4':[20000,40000,40000,55000,55000,70000,75000,75000,90000],
+  'Freins 1':[6500,8000,8000,11000,11000,15000,20000,20000,30000],
+  'Freins 2':[9000,11000,11000,16500,16500,20000,30000,30000,40000],
+  'Freins 3':[11500,16500,16500,20000,20000,25000,40000,40000,60000],
+  'Freins 4':[18000,20000,20000,30000,30000,40000,60000,60000,85000],
+  'Suspensions 1':[5000,6000,8000,6000,20000,20000,25000,25000,30000],
+  'Suspensions 2':[7500,8000,11000,8000,25000,30000,40000,40000,50000],
+  'Suspensions 3':[10000,10000,13500,10000,30000,40000,60000,60000,70000],
+};
+const GARAGE_PERF_GROUPS = {
+  '🔧 Moteur':['Moteur 1','Moteur 2','Moteur 3','Moteur 4','Moteur 5','Turbo'],
+  '⚙️ Transmission':['Transmission 1','Transmission 2','Transmission 3','Transmission 4'],
+  '🛑 Freins':['Freins 1','Freins 2','Freins 3','Freins 4'],
+  '🔩 Suspensions':['Suspensions 1','Suspensions 2','Suspensions 3'],
+};
+const GARAGE_CUSTOM_PRICES = {
+  'Aileron':1500,'Bas de caisse':1200,'Pare-choc AV':1500,'Pare-choc AR':1500,
+  'Échappement':800,'Arceaux de sécurité':800,'Grille':800,'Capot':1000,
+  'Aile gauche':700,'Aile droite':700,'Toit':850,'Contour de plaque':400,
+  'Calandre':400,'Néon intérieur':400,'Coffre':400,'Hydraulique':400,
+  'Bloc moteur':400,'Filtre à air':400,'Accessoires':400,'Caches-roues':400,
+  'Antennes':400,'Ailes':750,'Réservoir':400,'Fenêtre':400,'Rétroviseur':400,
+  'Light bar':400,'Klaxon':150,'Phares':650,'Roues':900,'Vitres':900,
+  'Intérieur':450,'Plaques':450,'Extra':1000,
+};
+const GARAGE_PAINT_GROUPS = {
+  '🎨 Peinture principale':{'Principale - Normale':500,'Principale - Métallique':750,'Principale - Pearl':750,'Principale - Matte':850,'Principale - Metal':850,'Principale - Chrome':1200},
+  '🖌️ Peinture secondaire':{'Secondaire - Normale':500,'Secondaire - Métallique':750,'Secondaire - Pearl':750,'Secondaire - Matte':850,'Secondaire - Metal':850,'Secondaire - Chrome':1200},
+  '✨ Finitions':{'Nacrage':700,'Motifs':1000,'Stickers':1000,'Couleurs intérieur':500,'Couleurs tableau de bord':500},
+};
+
 // ─── Helpers ────────────────────────────────────────────────
 const fmt = (n) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n ?? 0);
@@ -96,6 +140,17 @@ export default function PatronDashboard() {
   const [payingNow, setPayingNow]           = useState(false);
   const [lastPaidDate, setLastPaidDate]     = useState(null);
 
+  // Garage / Devis
+  const [devisClient,    setDevisClient]    = useState({firstName:'',lastName:'',model:'',category:'Sport'});
+  const [devisSelPerfs,  setDevisSelPerfs]  = useState(new Set());
+  const [devisSelCustoms,setDevisSelCustoms]= useState(new Set());
+  const [devisSelPaints, setDevisSelPaints] = useState(new Set());
+  const [devisNotes,     setDevisNotes]     = useState('');
+  const [devisSection,   setDevisSection]   = useState('perfs');
+  const [garageQuotes,   setGarageQuotes]   = useState([]);
+  const [expandedQuote,  setExpandedQuote]  = useState(null);
+  const [devisLoading,   setDevisLoading]   = useState(false);
+
   // Redirection si pas patron
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/');
@@ -168,6 +223,12 @@ export default function PatronDashboard() {
     setBalance(await r.json());
   }, []);
 
+  const loadGarageQuotes = useCallback(async () => {
+    const r = await fetch('/api/garage/devis');
+    if (r.ok) { const d = await r.json(); setGarageQuotes(d.quotes || []); }
+  }, []);
+
+
   const loadSalaryPayment = useCallback(async () => {
     const r = await fetch('/api/patron/salary-payment');
     setSalaryPayment(await r.json());
@@ -179,6 +240,8 @@ export default function PatronDashboard() {
     loadBalance();
     loadPending(); // toujours chargé pour le badge
     if (tab === 'salaires') { loadEmployees(); loadProducts(); loadSales(); loadSalaryPayment(); }
+    if (tab === 'devis')    { /* nothing to preload */ }
+    if (tab === 'registre') { loadGarageQuotes(); }
     if (tab === 'ventes')   { loadProducts(); loadEmployees(); loadInvoices(); }
     if (tab === 'produits') { loadProducts(); loadRawMaterials(); loadCostPrices(); }
     if (tab === 'stocks')   { loadRawMaterials(); loadStockMovements(); }
@@ -478,6 +541,7 @@ export default function PatronDashboard() {
   }
 
   const pendingCount = pendingUsers.filter(u => u.status === 'pending').length;
+  const isGarage = session.user.companyType === 'garage';
   const tabs = [
     { key: 'overview', label: '🏠 Vue d\'ensemble', badge: pendingCount },
     { key: 'ventes',   label: '🧾 Ventes' },
@@ -485,8 +549,47 @@ export default function PatronDashboard() {
     { key: 'salaires', label: '💰 Salaires & Impôts' },
     { key: 'produits', label: '📦 Produits' },
     { key: 'stocks',   label: '📊 Stocks' },
+    ...(isGarage ? [
+      { key: 'devis',    label: '🔧 Devis Custom' },
+      { key: 'registre', label: '📋 Registre' },
+    ] : []),
     { key: 'compte',   label: '⚙️ Mon compte' },
   ];
+
+  // ── Devis helpers ────────────────────────────────────────────────────────
+  const garageCatIdx = GARAGE_CATEGORIES.indexOf(devisClient.category);
+  const devisPerfsTotal   = [...devisSelPerfs].reduce((t,p) => t + (GARAGE_PERF_PRICES[p]?.[garageCatIdx]||0), 0);
+  const devisCustomsTotal = [...devisSelCustoms].reduce((t,c) => t + (GARAGE_CUSTOM_PRICES[c]||0), 0);
+  const dvisPaintsTotal   = [...devisSelPaints].reduce((t,p) => { for(const g of Object.values(GARAGE_PAINT_GROUPS)){if(g[p]) return t+g[p];} return t; }, 0);
+  const devisGrandTotal   = devisPerfsTotal + devisCustomsTotal + dvisPaintsTotal;
+
+  const toggleDevisPerf   = (p) => setDevisSelPerfs(s => { const n=new Set(s); n.has(p)?n.delete(p):n.add(p); return n; });
+  const toggleDevisCustom = (c) => setDevisSelCustoms(s => { const n=new Set(s); n.has(c)?n.delete(c):n.add(c); return n; });
+  const toggleDvisPaint   = (p) => setDevisSelPaints(s => { const n=new Set(s); n.has(p)?n.delete(p):n.add(p); return n; });
+  const resetDevis = () => {
+    setDevisClient({firstName:'',lastName:'',model:'',category:'Sport'});
+    setDevisSelPerfs(new Set()); setDevisSelCustoms(new Set()); setDevisSelPaints(new Set());
+    setDevisNotes(''); setDevisSection('perfs');
+  };
+  const submitDevis = async () => {
+    if (!devisClient.firstName && !devisClient.lastName) return showToast('Indiquez un nom client', 'error');
+    setDevisLoading(true);
+    const r = await fetch('/api/garage/devis', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        clientFirstName: devisClient.firstName, clientLastName: devisClient.lastName,
+        vehicleModel: devisClient.model, vehicleCategory: devisClient.category,
+        selectedPerformances: [...devisSelPerfs].map(p=>({type:p,price:GARAGE_PERF_PRICES[p]?.[garageCatIdx]||0})),
+        selectedCustoms: [...devisSelCustoms].map(c=>({type:c,price:GARAGE_CUSTOM_PRICES[c]||0})),
+        selectedPaints: [...devisSelPaints].map(p=>{let pr=0;for(const g of Object.values(GARAGE_PAINT_GROUPS)){if(g[p]){pr=g[p];break;}}return{type:p,price:pr};}),
+        perfsTotal:devisPerfsTotal, customsTotal:devisCustomsTotal, paintsTotal:dvisPaintsTotal, grandTotal:devisGrandTotal, notes:devisNotes,
+      }),
+    });
+    setDevisLoading(false);
+    if (r.ok) { showToast('Devis enregistré !'); resetDevis(); }
+    else showToast('Erreur enregistrement', 'error');
+  };
 
   return (
     <>
@@ -1721,7 +1824,287 @@ export default function PatronDashboard() {
             </div>
           )}
           {/* ══════════════════════════════════════════
+              ONGLET : DEVIS CUSTOM  (garage only)
+          ══════════════════════════════════════════ */}
+          {tab === 'devis' && (
+            <div>
+              <h2 style={S.sectionTitle}>🔧 Devis Custom — {session.user.companyName}</h2>
+              <div style={{ display:'flex', gap:24, alignItems:'flex-start', flexWrap:'wrap' }}>
+                {/* ─── Formulaire gauche ─── */}
+                <div style={{ flex:'1 1 500px', minWidth:320 }}>
+                  {/* Info client */}
+                  <div style={{ background:'linear-gradient(145deg,#16102a,#1e1435)', borderRadius:14, padding:'20px 24px', marginBottom:20, border:'1px solid rgba(224,64,251,0.18)' }}>
+                    <div style={{ fontWeight:700, color:'#d0b8f8', marginBottom:14, fontSize:15 }}>👤 Informations client</div>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
+                      <div>
+                        <div style={{ fontSize:11, color:'#8060a0', textTransform:'uppercase', letterSpacing:0.6, marginBottom:4 }}>Prénom</div>
+                        <input value={devisClient.firstName} onChange={e=>setDevisClient(c=>({...c,firstName:e.target.value}))} placeholder="Prénom" style={S.input} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize:11, color:'#8060a0', textTransform:'uppercase', letterSpacing:0.6, marginBottom:4 }}>Nom</div>
+                        <input value={devisClient.lastName} onChange={e=>setDevisClient(c=>({...c,lastName:e.target.value}))} placeholder="Nom" style={S.input} />
+                      </div>
+                    </div>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+                      <div>
+                        <div style={{ fontSize:11, color:'#8060a0', textTransform:'uppercase', letterSpacing:0.6, marginBottom:4 }}>Modèle véhicule</div>
+                        <input value={devisClient.model} onChange={e=>setDevisClient(c=>({...c,model:e.target.value}))} placeholder="ex: Zentorno" style={S.input} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize:11, color:'#8060a0', textTransform:'uppercase', letterSpacing:0.6, marginBottom:4 }}>Catégorie</div>
+                        <select value={devisClient.category} onChange={e=>setDevisClient(c=>({...c,category:e.target.value}))} style={S.input}>
+                          {GARAGE_CATEGORIES.map(cat=>(
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section tabs: perfs / customs / peintures */}
+                  <div style={{ display:'flex', gap:8, marginBottom:16 }}>
+                    {[['perfs','⚡ Performances'],['customs','🔩 Customs'],['paints','🎨 Peintures']].map(([k,lbl])=>(
+                      <button key={k} onClick={()=>setDevisSection(k)}
+                        style={{ flex:1, padding:'8px 0', borderRadius:8, border:'none', cursor:'pointer', fontWeight:700, fontSize:13,
+                          background: devisSection===k ? 'linear-gradient(135deg,#7c3aed,#e040fb)' : 'rgba(120,60,180,0.15)',
+                          color: devisSection===k ? '#fff' : '#a080c0' }}>
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* ─ Performances ─ */}
+                  {devisSection === 'perfs' && (
+                    <div>
+                      {Object.entries(GARAGE_PERF_GROUPS).map(([grpLabel, items])=>(
+                        <div key={grpLabel} style={{ marginBottom:16 }}>
+                          <div style={{ fontSize:12, color:'#8060a0', fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:8 }}>{grpLabel}</div>
+                          <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+                            {items.map(perf=>{
+                              const catIdx = GARAGE_CATEGORIES.indexOf(devisClient.category);
+                              const price  = GARAGE_PERF_PRICES[perf]?.[catIdx] || 0;
+                              const sel    = devisSelPerfs.has(perf);
+                              return (
+                                <button key={perf} onClick={()=>toggleDevisPerf(perf)}
+                                  style={{ padding:'6px 12px', borderRadius:20, border:`1px solid ${sel?'#e040fb':'rgba(120,60,180,0.3)'}`,
+                                    background: sel ? 'rgba(224,64,251,0.18)' : 'rgba(30,20,53,0.8)',
+                                    color: sel ? '#e040fb' : '#b090d0', cursor:'pointer', fontSize:12, fontWeight:sel?700:400 }}>
+                                  {perf} — {price.toLocaleString('fr-FR')}$
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ─ Customs ─ */}
+                  {devisSection === 'customs' && (
+                    <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+                      {Object.entries(GARAGE_CUSTOM_PRICES).map(([item, price])=>{
+                        const sel = devisSelCustoms.has(item);
+                        return (
+                          <button key={item} onClick={()=>toggleDevisCustom(item)}
+                            style={{ padding:'6px 12px', borderRadius:20, border:`1px solid ${sel?'#e040fb':'rgba(120,60,180,0.3)'}`,
+                              background: sel ? 'rgba(224,64,251,0.18)' : 'rgba(30,20,53,0.8)',
+                              color: sel ? '#e040fb' : '#b090d0', cursor:'pointer', fontSize:12, fontWeight:sel?700:400 }}>
+                            {item} — {price.toLocaleString('fr-FR')}$
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* ─ Peintures ─ */}
+                  {devisSection === 'paints' && (
+                    <div>
+                      {Object.entries(GARAGE_PAINT_GROUPS).map(([grpLabel, items])=>(
+                        <div key={grpLabel} style={{ marginBottom:16 }}>
+                          <div style={{ fontSize:12, color:'#8060a0', fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:8 }}>{grpLabel}</div>
+                          <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+                            {Object.entries(items).map(([paint, price])=>{
+                              const sel = devisSelPaints.has(paint);
+                              return (
+                                <button key={paint} onClick={()=>toggleDvisPaint(paint)}
+                                  style={{ padding:'6px 12px', borderRadius:20, border:`1px solid ${sel?'#e040fb':'rgba(120,60,180,0.3)'}`,
+                                    background: sel ? 'rgba(224,64,251,0.18)' : 'rgba(30,20,53,0.8)',
+                                    color: sel ? '#e040fb' : '#b090d0', cursor:'pointer', fontSize:12, fontWeight:sel?700:400 }}>
+                                  {paint} — {price.toLocaleString('fr-FR')}$
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Notes */}
+                  <div style={{ marginTop:20 }}>
+                    <div style={{ fontSize:11, color:'#8060a0', textTransform:'uppercase', letterSpacing:0.6, marginBottom:6 }}>Notes internes</div>
+                    <textarea value={devisNotes} onChange={e=>setDevisNotes(e.target.value)} rows={3}
+                      placeholder="Remarques, demandes spéciales..."
+                      style={{ ...S.input, resize:'vertical', width:'100%', boxSizing:'border-box' }} />
+                  </div>
+                </div>
+
+                {/* ─── Récap sticky droite ─── */}
+                <div style={{ flex:'0 0 300px', position:'sticky', top:80 }}>
+                  <div style={{ background:'linear-gradient(145deg,#1e1040,#2a1660)', borderRadius:16, padding:'20px 24px', border:'1px solid rgba(224,64,251,0.25)', boxShadow:'0 8px 32px rgba(0,0,0,0.6)' }}>
+                    <div style={{ fontWeight:800, color:'#e040fb', marginBottom:16, fontSize:16 }}>📋 Récapitulatif</div>
+
+                    {/* Client */}
+                    <div style={{ marginBottom:12, paddingBottom:12, borderBottom:'1px solid rgba(120,60,180,0.2)' }}>
+                      <div style={{ fontSize:12, color:'#8060a0', marginBottom:4 }}>Client</div>
+                      <div style={{ color:'#d0b8f8', fontWeight:600 }}>
+                        {devisClient.firstName || devisClient.lastName ? `${devisClient.firstName} ${devisClient.lastName}`.trim() : '—'}
+                      </div>
+                      <div style={{ fontSize:12, color:'#a080c0' }}>{devisClient.model || '—'} ({devisClient.category})</div>
+                    </div>
+
+                    {/* Lignes sélectionnées */}
+                    {devisSelPerfs.size > 0 && (
+                      <div style={{ marginBottom:10 }}>
+                        <div style={{ fontSize:11, color:'#8060a0', textTransform:'uppercase', marginBottom:4 }}>⚡ Performances</div>
+                        {[...devisSelPerfs].map(p=>{
+                          const catIdx = GARAGE_CATEGORIES.indexOf(devisClient.category);
+                          const price  = GARAGE_PERF_PRICES[p]?.[catIdx] || 0;
+                          return <div key={p} style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'#c0a0e0', marginBottom:2 }}><span>{p}</span><span>{price.toLocaleString('fr-FR')}$</span></div>;
+                        })}
+                      </div>
+                    )}
+                    {devisSelCustoms.size > 0 && (
+                      <div style={{ marginBottom:10 }}>
+                        <div style={{ fontSize:11, color:'#8060a0', textTransform:'uppercase', marginBottom:4 }}>🔩 Customs</div>
+                        {[...devisSelCustoms].map(c=>(
+                          <div key={c} style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'#c0a0e0', marginBottom:2 }}><span>{c}</span><span>{(GARAGE_CUSTOM_PRICES[c]||0).toLocaleString('fr-FR')}$</span></div>
+                        ))}
+                      </div>
+                    )}
+                    {devisSelPaints.size > 0 && (
+                      <div style={{ marginBottom:10 }}>
+                        <div style={{ fontSize:11, color:'#8060a0', textTransform:'uppercase', marginBottom:4 }}>🎨 Peintures</div>
+                        {[...devisSelPaints].map(p=>{
+                          let pr=0; for(const g of Object.values(GARAGE_PAINT_GROUPS)){if(g[p]){pr=g[p];break;}}
+                          return <div key={p} style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'#c0a0e0', marginBottom:2 }}><span>{p}</span><span>{pr.toLocaleString('fr-FR')}$</span></div>;
+                        })}
+                      </div>
+                    )}
+
+                    {/* Total */}
+                    <div style={{ borderTop:'1px solid rgba(120,60,180,0.3)', paddingTop:12, marginTop:8 }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', fontWeight:800, fontSize:18, color:'#e040fb' }}>
+                        <span>TOTAL</span>
+                        <span>{devisGrandTotal.toLocaleString('fr-FR')}$</span>
+                      </div>
+                    </div>
+
+                    {/* Boutons */}
+                    <button onClick={submitDevis} disabled={devisLoading}
+                      style={{ width:'100%', marginTop:16, padding:'12px 0', borderRadius:10, border:'none', cursor:'pointer', fontWeight:700, fontSize:14,
+                        background:'linear-gradient(135deg,#7c3aed,#e040fb)', color:'#fff', opacity:devisLoading?0.6:1 }}>
+                      {devisLoading ? '⏳ Envoi...' : '✅ Valider le devis'}
+                    </button>
+                    <button onClick={resetDevis}
+                      style={{ width:'100%', marginTop:8, padding:'10px 0', borderRadius:10, border:'1px solid rgba(120,60,180,0.3)', cursor:'pointer', fontWeight:600, fontSize:13,
+                        background:'transparent', color:'#a080c0' }}>
+                      🗑️ Réinitialiser
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════
+              ONGLET : REGISTRE  (garage only)
+          ══════════════════════════════════════════ */}
+          {tab === 'registre' && (
+            <div>
+              <h2 style={S.sectionTitle}>📋 Registre des clients — {session.user.companyName}</h2>
+              {garageQuotes.length === 0 ? (
+                <div style={{ textAlign:'center', color:'#8060a0', padding:60, fontSize:15 }}>Aucun devis enregistré</div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  {garageQuotes.map(q=>{
+                    const isOpen = expandedQuote === q.id;
+                    return (
+                      <div key={q.id} style={{ background:'linear-gradient(145deg,#16102a,#1e1435)', borderRadius:12, border:'1px solid rgba(224,64,251,0.15)', overflow:'hidden' }}>
+                        {/* Header row */}
+                        <div onClick={()=>setExpandedQuote(isOpen ? null : q.id)}
+                          style={{ display:'flex', alignItems:'center', padding:'14px 20px', cursor:'pointer', gap:16 }}>
+                          <div style={{ flex:1 }}>
+                            <span style={{ fontWeight:700, color:'#d0b8f8', fontSize:15 }}>{q.client_first_name} {q.client_last_name}</span>
+                            <span style={{ marginLeft:12, fontSize:12, color:'#8060a0' }}>{q.vehicle_model} ({q.vehicle_category})</span>
+                          </div>
+                          <div style={{ fontWeight:800, color:'#e040fb', fontSize:16 }}>{Number(q.grand_total).toLocaleString('fr-FR')}$</div>
+                          <div style={{ fontSize:12, color:'#8060a0', minWidth:80, textAlign:'right' }}>{new Date(q.created_at).toLocaleDateString('fr-FR')}</div>
+                          <div style={{ color:'#8060a0', fontSize:18 }}>{isOpen ? '▲' : '▼'}</div>
+                        </div>
+                        {/* Expanded details */}
+                        {isOpen && (
+                          <div style={{ padding:'0 20px 16px', borderTop:'1px solid rgba(120,60,180,0.2)' }}>
+                            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginTop:14 }}>
+                              {/* Perfs */}
+                              <div>
+                                <div style={{ fontSize:11, color:'#8060a0', textTransform:'uppercase', marginBottom:6 }}>⚡ Performances</div>
+                                {(q.selected_performances||[]).length === 0
+                                  ? <div style={{ color:'#604080', fontSize:12 }}>Aucune</div>
+                                  : (q.selected_performances||[]).map((p,i)=>(
+                                    <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#c0a0e0', marginBottom:2 }}>
+                                      <span>{p.type}</span><span>{Number(p.price).toLocaleString('fr-FR')}$</span>
+                                    </div>
+                                  ))}
+                                <div style={{ marginTop:6, fontWeight:700, color:'#d0b8f8', fontSize:13 }}>Sous-total: {Number(q.perfs_total).toLocaleString('fr-FR')}$</div>
+                              </div>
+                              {/* Customs */}
+                              <div>
+                                <div style={{ fontSize:11, color:'#8060a0', textTransform:'uppercase', marginBottom:6 }}>🔩 Customs</div>
+                                {(q.selected_customs||[]).length === 0
+                                  ? <div style={{ color:'#604080', fontSize:12 }}>Aucun</div>
+                                  : (q.selected_customs||[]).map((c,i)=>(
+                                    <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#c0a0e0', marginBottom:2 }}>
+                                      <span>{c.type}</span><span>{Number(c.price).toLocaleString('fr-FR')}$</span>
+                                    </div>
+                                  ))}
+                                <div style={{ marginTop:6, fontWeight:700, color:'#d0b8f8', fontSize:13 }}>Sous-total: {Number(q.customs_total).toLocaleString('fr-FR')}$</div>
+                              </div>
+                              {/* Peintures */}
+                              <div>
+                                <div style={{ fontSize:11, color:'#8060a0', textTransform:'uppercase', marginBottom:6 }}>🎨 Peintures</div>
+                                {(q.selected_paints||[]).length === 0
+                                  ? <div style={{ color:'#604080', fontSize:12 }}>Aucune</div>
+                                  : (q.selected_paints||[]).map((p,i)=>(
+                                    <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#c0a0e0', marginBottom:2 }}>
+                                      <span>{p.type}</span><span>{Number(p.price).toLocaleString('fr-FR')}$</span>
+                                    </div>
+                                  ))}
+                                <div style={{ marginTop:6, fontWeight:700, color:'#d0b8f8', fontSize:13 }}>Sous-total: {Number(q.paints_total).toLocaleString('fr-FR')}$</div>
+                              </div>
+                            </div>
+                            {q.notes && (
+                              <div style={{ marginTop:12, padding:'8px 12px', background:'rgba(120,60,180,0.08)', borderRadius:8, fontSize:12, color:'#a080c0' }}>
+                                📝 {q.notes}
+                              </div>
+                            )}
+                            <div style={{ marginTop:12, fontSize:12, color:'#604080' }}>
+                              Employé: {q.employee_name || '—'} · Enregistré le {new Date(q.created_at).toLocaleString('fr-FR')}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════
               ONGLET : MON COMPTE
+          ══════════════════════════════════════════ */}
+          {tab === 'compte' && (
           ══════════════════════════════════════════ */}
           {tab === 'compte' && (
             <div style={{ maxWidth: 480, margin: '0 auto' }}>
