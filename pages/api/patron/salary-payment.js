@@ -26,7 +26,7 @@ export default async function handler(req, res) {
     if (isGarage) {
       // Garage : salaire = grand_total × salary_percent (pas de coût matières)
       const [totalRow] = await sql`
-        SELECT COALESCE(SUM(gq.grand_total * u.salary_percent / 100), 0)::float AS total
+        SELECT COALESCE(SUM(GREATEST(0, gq.grand_total - COALESCE(gq.parts_total,0)) * u.salary_percent / 100), 0)::float AS total
         FROM garage_quotes gq
         JOIN users u ON u.id = gq.employee_id
         WHERE gq.company_id = ${companyId}

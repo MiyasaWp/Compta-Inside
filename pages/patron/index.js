@@ -58,6 +58,46 @@ const GARAGE_PAINT_GROUPS = {
   '🖌️ Peinture secondaire':{'Secondaire - Normale':500,'Secondaire - Métallique':750,'Secondaire - Pearl':750,'Secondaire - Matte':850,'Secondaire - Metal':850,'Secondaire - Chrome':1200},
   '✨ Finitions':{'Nacrage':700,'Motifs':1000,'Stickers':1000,'Couleurs intérieur':500,'Couleurs tableau de bord':500},
 };
+// ─── Coûts d'usine (prix d'achat pièces) ────────────────────────────────────
+const GARAGE_PERF_COSTS = {
+  'Moteur 1':[1600,2000,4800,7600,10000,16000,40000,48000,88000],
+  'Moteur 2':[2400,4000,6400,10400,12000,24000,48000,60000,96000],
+  'Moteur 3':[4000,6400,16000,16000,20000,40000,64000,68000,104000],
+  'Moteur 4':[8000,12000,28000,36000,32000,52000,76000,78400,112000],
+  'Moteur 5':[16000,28000,48000,60000,64000,72000,100000,88000,120000],
+  'Turbo':[40000,48000,60000,76000,96000,112000,128000,128000,160000],
+  'Transmission 1':[6400,8000,8000,20000,20000,28000,32000,32000,40000],
+  'Transmission 2':[9600,12000,12000,28000,28000,36000,44000,44000,48000],
+  'Transmission 3':[12000,20000,20000,34000,34000,44800,50000,50000,60000],
+  'Transmission 4':[16000,32000,32000,44000,44000,56000,60000,60000,72000],
+  'Freins 1':[5200,6400,6400,8800,8800,12000,16000,16000,24000],
+  'Freins 2':[7200,8800,8800,13200,13200,16000,24000,24000,32000],
+  'Freins 3':[9200,13200,13200,16000,16000,20000,32000,32000,48000],
+  'Freins 4':[14400,16000,16000,24000,24000,32000,48000,48000,68000],
+  'Suspensions 1':[4000,4800,6400,4800,16000,16000,20000,20000,24000],
+  'Suspensions 2':[6000,6400,8800,6400,20000,24000,32000,32000,40000],
+  'Suspensions 3':[8000,8000,10800,8000,24000,32000,48000,48000,56000],
+};
+const GARAGE_CUSTOM_COSTS = {
+  'Aileron':1200,'Bas de caisse':960,'Pare-choc AV':1200,'Pare-choc AR':1200,
+  'Échappement':640,'Arceaux de sécurité':640,'Grille':640,'Capot':800,
+  'Aile gauche':560,'Aile droite':560,'Toit':680,'Contour de plaque':320,
+  'Calandre':320,'Néon intérieur':320,'Coffre':320,'Hydraulique':320,
+  'Bloc moteur':320,'Filtre à air':320,'Accessoires':320,'Caches-roues':320,
+  'Antennes':320,'Ailes':600,'Réservoir':320,'Fenêtre':320,'Rétroviseur':320,
+  'Light bar':320,'Klaxon':120,'Phares':520,'Roues':720,'Vitres':720,
+  'Intérieur':360,'Plaques':360,'Extra':800,
+  // Services (coût = prix achat Tarification)
+  'Répa moteur':100,'Répa Carrosserie':50,'Nettoyage':25,
+};
+const GARAGE_PAINT_COSTS = {
+  'Principale - Normale':400,'Principale - Métallique':600,'Principale - Pearl':600,
+  'Principale - Matte':680,'Principale - Metal':680,'Principale - Chrome':960,
+  'Secondaire - Normale':400,'Secondaire - Métallique':600,'Secondaire - Pearl':600,
+  'Secondaire - Matte':680,'Secondaire - Metal':680,'Secondaire - Chrome':960,
+  'Nacrage':560,'Motifs':800,'Stickers':800,
+  'Couleurs intérieur':400,'Couleurs tableau de bord':400,
+};
 
 // ─── Helpers ────────────────────────────────────────────────
 const fmt = (n) =>
@@ -574,6 +614,12 @@ export default function PatronDashboard() {
   const devisCustomsTotal = [...devisSelCustoms].reduce((t,c) => t + (GARAGE_CUSTOM_PRICES[c]||0), 0);
   const dvisPaintsTotal   = [...devisSelPaints].reduce((t,p) => { for(const g of Object.values(GARAGE_PAINT_GROUPS)){if(g[p]) return t+g[p];} return t; }, 0);
   const devisGrandTotal   = devisPerfsTotal + devisCustomsTotal + dvisPaintsTotal;
+  // Coûts d'usine (pièces)
+  const devisPerfsPartsCost   = [...devisSelPerfs].reduce((t,p) => t + (GARAGE_PERF_COSTS[p]?.[garageCatIdx]||0), 0);
+  const devisCustomsPartsCost = [...devisSelCustoms].reduce((t,c) => t + (GARAGE_CUSTOM_COSTS[c]||0), 0);
+  const dvisPaintsPartsCost   = [...devisSelPaints].reduce((t,p) => t + (GARAGE_PAINT_COSTS[p]||0), 0);
+  const devisPartsTotal       = devisPerfsPartsCost + devisCustomsPartsCost + dvisPaintsPartsCost;
+  const devisMargin           = devisGrandTotal - devisPartsTotal;
 
   const toggleDevisPerf   = (p) => setDevisSelPerfs(s => { const n=new Set(s); n.has(p)?n.delete(p):n.add(p); return n; });
   const toggleDevisCustom = (c) => setDevisSelCustoms(s => { const n=new Set(s); n.has(c)?n.delete(c):n.add(c); return n; });
@@ -602,7 +648,7 @@ export default function PatronDashboard() {
         selectedPerformances: [...devisSelPerfs].map(p=>({type:p,price:GARAGE_PERF_PRICES[p]?.[garageCatIdx]||0})),
         selectedCustoms: [...devisSelCustoms].map(c=>({type:c,price:GARAGE_CUSTOM_PRICES[c]||0})),
         selectedPaints: [...devisSelPaints].map(p=>{let pr=0;for(const g of Object.values(GARAGE_PAINT_GROUPS)){if(g[p]){pr=g[p];break;}}return{type:p,price:pr};}),
-        perfsTotal:devisPerfsTotal, customsTotal:devisCustomsTotal, paintsTotal:dvisPaintsTotal, grandTotal:devisGrandTotal, notes:devisNotes,
+        perfsTotal:devisPerfsTotal, customsTotal:devisCustomsTotal, paintsTotal:dvisPaintsTotal, grandTotal:devisGrandTotal, partsTotal:devisPartsTotal, notes:devisNotes,
       }),
     });
     setDevisLoading(false);
@@ -2020,9 +2066,17 @@ export default function PatronDashboard() {
 
                     {/* Total */}
                     <div style={{ borderTop:'1px solid rgba(120,60,180,0.3)', paddingTop:12, marginTop:8 }}>
-                      <div style={{ display:'flex', justifyContent:'space-between', fontWeight:800, fontSize:18, color:'#e040fb' }}>
-                        <span>TOTAL</span>
+                      <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'#a080c0', marginBottom:4 }}>
+                        <span>Prix client</span>
                         <span>{devisGrandTotal.toLocaleString('fr-FR')}$</span>
+                      </div>
+                      <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'#f87171', marginBottom:4 }}>
+                        <span>— Coût pièces</span>
+                        <span>-{devisPartsTotal.toLocaleString('fr-FR')}$</span>
+                      </div>
+                      <div style={{ display:'flex', justifyContent:'space-between', fontWeight:800, fontSize:18, color:'#e040fb', borderTop:'1px solid rgba(120,60,180,0.2)', paddingTop:8, marginTop:4 }}>
+                        <span>MARGE NETTE</span>
+                        <span>{devisMargin.toLocaleString('fr-FR')}$</span>
                       </div>
                     </div>
 

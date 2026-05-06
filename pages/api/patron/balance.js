@@ -19,12 +19,27 @@ export default async function handler(req, res) {
     const refBalance = company?.account_balance ?? 0;
     const refDate    = company?.balance_set_at  ?? new Date(0);
 
+    // Type d'entreprise
+    const [cRow] = await sql`SELECT COALESCE(company_type,'cafe') AS company_type FROM companies WHERE id = ${companyId}`;
+    const isGarage = cRow?.company_type === 'garage';
+
     // Ventes (invoices) depuis la date de référence
     const [salesRow] = await sql`
       SELECT COALESCE(SUM(total_amount), 0)::float AS total
       FROM invoices
       WHERE company_id = ${companyId} AND created_at >= ${refDate}
     `;
+
+    // Ventes garage (grand_total des devis) depuis la date de référence
+    let garageRevenue = 0;
+    if (isGarage) {
+      const [gr] = await sql\`
+        SELECT COALESCE(SUM(grand_total), 0)::float AS total
+        FROM garage_quotes
+        WHERE company_id = \${companyId} AND created_at >= \${refDate}
+      \`;
+      garageRevenue = gr.total;
+    }
 
     // Achats depuis la date de référence
     const [purchRow] = await sql`
@@ -44,7 +59,7 @@ export default async function handler(req, res) {
     const salesSince      = salesRow.total;
     const purchasesSince  = purchRow.total;
     const salariesPaid    = salPaidRow.total;
-    const currentBalance  = refBalance + salesSince - purchasesSince - salariesPaid;
+    const currentBalance  = refBalance + salesSince + garageRevenue - purchasesSince - salariesPaid;
 
     // ── Historique hebdomadaire (8 semaines glissantes) ──────────
     const weeklyHistory = await sql`
@@ -84,6 +99,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       refBalance,
+      garageRevenue,
       refDate,
       salesSince,
       purchasesSince,

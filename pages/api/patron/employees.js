@@ -31,7 +31,7 @@ export default async function handler(req, res) {
         WITH period_data AS (
           SELECT gq.employee_id,
                  COALESCE(SUM(gq.grand_total), 0)::float AS gross_sales,
-                 COALESCE(SUM(gq.grand_total), 0)::float AS margin
+                 COALESCE(SUM(GREATEST(0, gq.grand_total - COALESCE(gq.parts_total,0))), 0)::float AS margin
           FROM garage_quotes gq
           WHERE gq.company_id = ${companyId}
             AND gq.created_at > ${lastPaid}
@@ -40,7 +40,7 @@ export default async function handler(req, res) {
         month_data AS (
           SELECT gq.employee_id,
                  COALESCE(SUM(gq.grand_total), 0)::float AS gross_sales,
-                 COALESCE(SUM(gq.grand_total), 0)::float AS margin
+                 COALESCE(SUM(GREATEST(0, gq.grand_total - COALESCE(gq.parts_total,0))), 0)::float AS margin
           FROM garage_quotes gq
           WHERE gq.company_id = ${companyId}
             AND DATE_TRUNC('month', gq.created_at) = DATE_TRUNC('month', NOW())

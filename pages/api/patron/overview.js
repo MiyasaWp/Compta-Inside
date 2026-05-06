@@ -55,7 +55,7 @@ export default async function handler(req, res) {
         WITH base AS (
           SELECT
             gq.created_at AS sale_date,
-            gq.grand_total * u.salary_percent / 100 AS sal_contrib
+            GREATEST(0, gq.grand_total - COALESCE(gq.parts_total,0)) * u.salary_percent / 100 AS sal_contrib
           FROM garage_quotes gq
           JOIN users u ON u.id = gq.employee_id
           WHERE gq.company_id = ${companyId}

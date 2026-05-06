@@ -34,7 +34,7 @@ export default async function handler(req, res) {
     const [gRow] = await sql`
       SELECT
         COALESCE(SUM(grand_total), 0)::float AS gross_sales,
-        COALESCE(SUM(grand_total), 0)::float AS margin,
+        COALESCE(SUM(GREATEST(0, grand_total - COALESCE(parts_total,0))), 0)::float AS margin,
         COUNT(*)::int                        AS nb_sales
       FROM garage_quotes
       WHERE employee_id = ${employeeId}

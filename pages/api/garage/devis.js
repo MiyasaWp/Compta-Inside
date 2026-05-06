@@ -27,15 +27,19 @@ export default async function handler(req, res) {
     const {
       clientFirstName, clientLastName, vehicleModel, vehicleCategory,
       selectedPerformances, selectedCustoms, selectedPaints,
-      perfsTotal, customsTotal, paintsTotal, grandTotal, notes,
+      perfsTotal, customsTotal, paintsTotal, grandTotal, partsTotal, notes,
     } = req.body;
 
+    const parts = parseFloat(partsTotal) || 0;
+    const grand = parseFloat(grandTotal) || 0;
+
+    // Insérer le devis
     const [quote] = await sql`
       INSERT INTO garage_quotes (
         company_id, employee_id,
         client_first_name, client_last_name, vehicle_model, vehicle_category,
         selected_performances, selected_customs, selected_paints,
-        perfs_total, customs_total, paints_total, grand_total, notes
+        perfs_total, customs_total, paints_total, grand_total, parts_total, notes
       ) VALUES (
         ${companyId}, ${employeeId},
         ${clientFirstName || ''}, ${clientLastName || ''},
@@ -44,10 +48,20 @@ export default async function handler(req, res) {
         ${JSON.stringify(selectedCustoms || [])},
         ${JSON.stringify(selectedPaints || [])},
         ${perfsTotal || 0}, ${customsTotal || 0}, ${paintsTotal || 0},
-        ${grandTotal || 0}, ${notes || null}
+        ${grand}, ${parts}, ${notes || null}
       )
       RETURNING *
     `;
+
+    // Déduire le coût des pièces du solde bancaire automatiquement
+    if (parts > 0) {
+      await sql`
+        UPDATE companies
+        SET account_balance = COALESCE(account_balance, 0) - ${parts}
+        WHERE id = ${companyId}
+      `;
+    }
+
     return res.status(201).json({ quote });
   }
 
@@ -56,9 +70,14 @@ export default async function handler(req, res) {
     const { id } = req.query;
     if (!id) return res.status(400).json({ error: 'id manquant' });
 
-    // Seuls les patrons/admins peuvent supprimer
     if (!['patron', 'admin'].includes(token.role))
       return res.status(403).json({ error: 'Accès refusé' });
+
+    // Récupérer parts_total pour rembourser le solde
+    const [existing] = await sql`
+      SELECT parts_total::float FROM garage_quotes
+      WHERE id = ${parseInt(id)} AND company_id = ${companyId}
+    `;
 
     const [deleted] = await sql`
       DELETE FROM garage_quotes
@@ -66,6 +85,16 @@ export default async function handler(req, res) {
       RETURNING id
     `;
     if (!deleted) return res.status(404).json({ error: 'Devis introuvable' });
+
+    // Rembourser les pièces au solde si suppression
+    if (existing?.parts_total > 0) {
+      await sql`
+        UPDATE companies
+        SET account_balance = COALESCE(account_balance, 0) + ${existing.parts_total}
+        WHERE id = ${companyId}
+      `;
+    }
+
     return res.status(200).json({ ok: true });
   }
 
