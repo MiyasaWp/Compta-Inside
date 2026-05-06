@@ -45,7 +45,18 @@ export default async function handler(req, res) {
     WHERE company_id  = ${companyId}
       AND purchase_date >= DATE_TRUNC('week', NOW())
   `;
-  const weekPurchases = weekPurchRow.total;
+  // Pour les garages : coût des pièces = déductible IRS (comme les achats matières)
+  let weekPartsCost = 0;
+  if (isGarage) {
+    const [pcRow] = await sql`
+      SELECT COALESCE(SUM(parts_total), 0)::float AS total
+      FROM garage_quotes
+      WHERE company_id = ${companyId}
+        AND created_at >= DATE_TRUNC('week', NOW())
+    `;
+    weekPartsCost = pcRow.total;
+  }
+  const weekPurchases = weekPurchRow.total + weekPartsCost;
 
   // ── Salaires semaine ─────────────────────────────────────────
   // Pour les garages : salaire = grand_total × salary_percent (pas de coût matières)
@@ -139,7 +150,17 @@ export default async function handler(req, res) {
     WHERE company_id  = ${companyId}
       AND DATE_TRUNC('month', purchase_date) = DATE_TRUNC('month', NOW())
   `;
-  const monthPurchases = monthPurchRow.total;
+  let monthPartsCost = 0;
+  if (isGarage) {
+    const [mpcRow] = await sql`
+      SELECT COALESCE(SUM(parts_total), 0)::float AS total
+      FROM garage_quotes
+      WHERE company_id = ${companyId}
+        AND DATE_TRUNC('month', created_at) = DATE_TRUNC('month', NOW())
+    `;
+    monthPartsCost = mpcRow.total;
+  }
+  const monthPurchases = monthPurchRow.total + monthPartsCost;
 
   const monthTaxBase        = Math.max(0, monthSales - monthPurchases - monthSalaries);
   const monthTaxBaseNoPurch = Math.max(0, monthSales - monthSalaries);
@@ -180,8 +201,19 @@ export default async function handler(req, res) {
         AND purchase_date >= DATE_TRUNC('week', NOW()) - (${i}  * INTERVAL '1 week')
         AND purchase_date <  DATE_TRUNC('week', NOW()) - (${i - 1} * INTERVAL '1 week')
     `;
+    let prevPartsCost = 0;
+    if (isGarage) {
+      const [ppc] = await sql`
+        SELECT COALESCE(SUM(parts_total), 0)::float AS total
+        FROM garage_quotes
+        WHERE company_id = ${companyId}
+          AND created_at >= DATE_TRUNC('week', NOW()) - (${i}  * INTERVAL '1 week')
+          AND created_at <  DATE_TRUNC('week', NOW()) - (${i - 1} * INTERVAL '1 week')
+      `;
+      prevPartsCost = ppc.total;
+    }
     const sal     = prevSals[i - 1];
-    const netRaw  = prevSalesTotal - p.total - sal;
+    const netRaw  = prevSalesTotal - (p.total + prevPartsCost) - sal;
     const taxBase = Math.max(0, netRaw);
     const tax     = computeWeeklyTax(taxBase);
 
@@ -190,7 +222,7 @@ export default async function handler(req, res) {
     prevWeeks.push({
       weekStart: weekStart.toISOString().split('T')[0],
       sales:     prevSalesTotal,
-      purchases: p.total,
+      purchases: p.total + prevPartsCost,
       salaries:  sal,
       net:       netRaw,
       taxBase,
