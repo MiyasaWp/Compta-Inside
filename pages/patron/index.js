@@ -203,6 +203,12 @@ export default function PatronDashboard() {
   const [expandedQuote,  setExpandedQuote]  = useState(null);
   const [devisLoading,   setDevisLoading]   = useState(false);
 
+  // ── Recherche / filtres ────────────────────────────────────
+  const [invoiceSearch,  setInvoiceSearch]  = useState('');
+  const [productSearch,  setProductSearch]  = useState('');
+  const [purchaseSearch, setPurchaseSearch] = useState('');
+  const [stockSearch,    setStockSearch]    = useState('');
+
   // Redirection si pas patron
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/');
@@ -683,24 +689,29 @@ export default function PatronDashboard() {
           </div>
         </nav>
 
-        {/* Onglets */}
-        <div style={S.tabBar}>
-          {tabs.map((t) => (
-            <button
-              key={t.key}
-              style={tab === t.key ? { ...S.tabBtn, ...S.tabBtnActive } : S.tabBtn}
-              onClick={() => setTab(t.key)}
-            >
-              {t.label}
-              {t.badge > 0 && (
-                <span style={{ marginLeft: 6, background: '#dc2626', color: '#fff', borderRadius: '50%', fontSize: 11, fontWeight: 700, padding: '1px 6px', verticalAlign: 'middle' }}>
-                  {t.badge}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
+        {/* Layout sidebar + contenu */}
+        <div style={{ display: 'flex', minHeight: 'calc(100vh - 64px)' }}>
 
+        {/* ── Sidebar navigation ── */}
+        <aside style={S.sidebar}>
+          <div style={S.sidebarInner}>
+            {tabs.map((t) => (
+              <button
+                key={t.key}
+                style={tab === t.key ? { ...S.sidebarItem, ...S.sidebarItemActive } : S.sidebarItem}
+                onClick={() => setTab(t.key)}
+              >
+                <span style={{ flex: 1, textAlign: 'left' }}>{t.label}</span>
+                {t.badge > 0 && (
+                  <span style={S.sidebarBadge}>{t.badge}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        {/* ── Contenu principal ── */}
+        <div style={{ flex: 1, overflowX: 'hidden' }}>
         <main style={S.main}>
 
           {/* ══════════════════════════════════════════
@@ -1083,12 +1094,25 @@ export default function PatronDashboard() {
               </div>
 
               {/* Historique toutes les factures */}
-              <h3 style={{ ...S.subTitle, marginTop: 36 }}>Historique des factures</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 36, marginBottom: 14, flexWrap: 'wrap' }}>
+                <h3 style={{ ...S.subTitle, margin: 0 }}>Historique des factures</h3>
+                <input
+                  value={invoiceSearch}
+                  onChange={e => setInvoiceSearch(e.target.value)}
+                  placeholder="🔍 Rechercher par employé, #facture…"
+                  style={S.searchInput}
+                />
+                {invoiceSearch && (
+                  <span style={{ fontSize: 13, color: '#8060a0' }}>
+                    {invoices.filter(inv => inv.employee_name?.toLowerCase().includes(invoiceSearch.toLowerCase()) || String(inv.id).includes(invoiceSearch)).length} résultat(s)
+                  </span>
+                )}
+              </div>
               {invoices.length === 0 ? (
                 <p style={S.empty}>Aucune facture enregistrée.</p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {invoices.map((inv) => (
+                  {invoices.filter(inv => !invoiceSearch || inv.employee_name?.toLowerCase().includes(invoiceSearch.toLowerCase()) || String(inv.id).includes(invoiceSearch)).map((inv) => (
                     <div key={inv.id} style={{ background: 'linear-gradient(145deg,#16102a,#1e1435)', borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(224,64,251,0.12)', boxShadow: '0 4px 20px rgba(0,0,0,0.4)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', cursor: 'pointer' }}
                         onClick={() => setExpandedInv(expandedInv === inv.id ? null : inv.id)}>
@@ -1578,6 +1602,16 @@ export default function PatronDashboard() {
               )}
 
               {/* Liste des produits */}
+              {products.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <input
+                    value={productSearch}
+                    onChange={e => setProductSearch(e.target.value)}
+                    placeholder="🔍 Rechercher un produit ou une catégorie…"
+                    style={S.searchInput}
+                  />
+                </div>
+              )}
               {products.length === 0 ? (
                 <p style={S.empty}>Aucun produit. Ajoutez-en un ci-dessus.</p>
               ) : (
@@ -1595,7 +1629,7 @@ export default function PatronDashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {products.map((p) => {
+                      {products.filter(p => !productSearch || p.name?.toLowerCase().includes(productSearch.toLowerCase()) || p.category?.toLowerCase().includes(productSearch.toLowerCase())).map((p) => {
                         const cp = costPrices.find(c => c.id === p.id);
                         const marginPct = cp?.margin_pct ?? null;
                         const marginColor = marginPct === null ? '#5a4080'
@@ -1776,6 +1810,16 @@ export default function PatronDashboard() {
               </div>
 
               {/* Liste des matières premières */}
+              {rawMaterials.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <input
+                    value={stockSearch}
+                    onChange={e => setStockSearch(e.target.value)}
+                    placeholder="🔍 Rechercher une matière première…"
+                    style={S.searchInput}
+                  />
+                </div>
+              )}
               {rawMaterials.length === 0 ? (
                 <p style={S.empty}>Aucune matière première. Ajoutez-en une ci-dessus.</p>
               ) : (
@@ -1792,7 +1836,7 @@ export default function PatronDashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {rawMaterials.map((m) => {
+                      {rawMaterials.filter(m => !stockSearch || m.name?.toLowerCase().includes(stockSearch.toLowerCase())).map((m) => {
                         const isLow = m.quantity <= m.min_alert;
                         return (
                           <tr key={m.id} style={{ ...S.tr, background: isLow ? 'rgba(220,38,38,0.08)' : 'rgba(255,255,255,0.015)' }}>
@@ -2234,6 +2278,8 @@ export default function PatronDashboard() {
           )}
 
         </main>
+        </div>{/* fin contenu principal */}
+        </div>{/* fin layout sidebar+contenu */}
       </div>
     </>
   );
@@ -2307,6 +2353,72 @@ const S = {
 
   toast: { position: 'fixed', top: 20, right: 20, zIndex: 9999, padding: '13px 22px', borderRadius: 12, color: '#fff', fontWeight: 600, fontSize: 15, boxShadow: '0 8px 32px rgba(0,0,0,0.6)' },
 
+  // ── Sidebar navigation
+  sidebar: {
+    width: 228,
+    flexShrink: 0,
+    background: 'linear-gradient(180deg, #06030e 0%, #0c0620 100%)',
+    borderRight: '1px solid rgba(224,64,251,0.1)',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  sidebarInner: {
+    padding: '16px 10px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 3,
+    position: 'sticky',
+    top: 0,
+  },
+  sidebarItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '11px 14px',
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: 13.5,
+    fontWeight: 500,
+    color: '#5a4080',
+    borderRadius: 10,
+    textAlign: 'left',
+    width: '100%',
+    transition: 'all 0.15s',
+    fontFamily: "'Segoe UI', system-ui, Arial, sans-serif",
+  },
+  sidebarItemActive: {
+    background: 'linear-gradient(135deg, rgba(176,32,208,0.2), rgba(240,96,255,0.1))',
+    color: '#f060ff',
+    fontWeight: 700,
+    boxShadow: 'inset 3px 0 0 0 #e040fb, inset 0 0 0 1px rgba(224,64,251,0.22)',
+  },
+  sidebarBadge: {
+    background: '#dc2626',
+    color: '#fff',
+    borderRadius: 20,
+    fontSize: 11,
+    fontWeight: 700,
+    padding: '1px 7px',
+    minWidth: 20,
+    textAlign: 'center',
+  },
+
+  // ── Barre de recherche
+  searchInput: {
+    width: '100%',
+    maxWidth: 420,
+    padding: '10px 14px',
+    border: '1.5px solid rgba(224,64,251,0.18)',
+    borderRadius: 9,
+    fontSize: 14,
+    color: '#f0e8ff',
+    background: 'rgba(255,255,255,0.03)',
+    boxSizing: 'border-box',
+    outline: 'none',
+    fontFamily: "'Segoe UI', system-ui, Arial, sans-serif",
+  },
+
   // ── Navigation cosmique
   nav: {
     background: 'linear-gradient(90deg, #08040f 0%, #110830 50%, #08040f 100%)',
@@ -2333,25 +2445,7 @@ const S = {
     borderRadius: 9, cursor: 'pointer', fontSize: 14, color: '#c090e0', fontWeight: 500,
   },
 
-  // ── Onglets violet sombre
-  tabBar: {
-    background: '#0f0820',
-    borderBottom: '1px solid rgba(224,64,251,0.12)',
-    display: 'flex', padding: '0 28px', overflowX: 'auto',
-  },
-  tabBtn: {
-    padding: '15px 20px', background: 'none', border: 'none', cursor: 'pointer',
-    fontSize: 14.5, fontWeight: 500, color: '#5a4080', whiteSpace: 'nowrap',
-    borderBottom: '2px solid transparent', transition: 'color 0.2s',
-  },
-  tabBtnActive: {
-    color: '#f060ff',
-    borderBottom: '2px solid #e040fb',
-    fontWeight: 700,
-    textShadow: '0 0 20px rgba(224,64,251,0.5)',
-  },
-
-  main: { maxWidth: 1600, margin: '0 auto', padding: '24px 48px' },
+  main: { maxWidth: 1400, margin: '0 auto', padding: '28px 40px' },
   sectionTitle: { fontSize: 24, fontWeight: 700, color: '#f0e8ff', marginBottom: 22, letterSpacing: -0.3 },
   sectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22, flexWrap: 'wrap', gap: 10 },
   subTitle: { fontSize: 12, fontWeight: 700, color: '#8060a0', marginBottom: 14, textTransform: 'uppercase', letterSpacing: 1 },
