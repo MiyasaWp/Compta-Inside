@@ -111,16 +111,27 @@ export default async function handler(req, res) {
     if (total <= 0)
       return res.status(400).json({ error: 'Aucun salaire accumulé depuis le dernier paiement.' });
 
+    // Anti-double-clic : bloquer si un paiement a été effectué dans les 5 dernières secondes
+    const [recentPayment] = await sql`
+      SELECT id FROM salary_payments
+      WHERE company_id = ${companyId}
+        AND paid_at > NOW() - INTERVAL '5 seconds'
+    `;
+    if (recentPayment) {
+      return res.status(409).json({ error: 'Un paiement vient d\'être effectué. Veuillez patienter quelques secondes.' });
+    }
+
+    // Libellé = lundi de la semaine en cours (pour le regroupement historique)
     const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
     weekStart.setHours(0, 0, 0, 0);
     const weekStartStr = weekStart.toISOString().split('T')[0];
 
+    // Chaque paiement crée sa propre ligne (plus d'accumulation ON CONFLICT)
+    // Nécessite la migration schema_v17.sql (suppression de la contrainte UNIQUE)
     await sql`
       INSERT INTO salary_payments (company_id, week_start, total_amount, paid_by)
       VALUES (${companyId}, ${weekStartStr}, ${total}, ${parseInt(token.sub)})
-      ON CONFLICT (company_id, week_start)
-      DO UPDATE SET total_amount = salary_payments.total_amount + EXCLUDED.total_amount,
-                    paid_at = NOW()
     `;
 
     return res.status(200).json({ ok: true, total });
