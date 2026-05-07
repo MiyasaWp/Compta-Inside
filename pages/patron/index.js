@@ -708,289 +708,221 @@ export default function PatronDashboard() {
           ══════════════════════════════════════════ */}
           {tab === 'overview' && (
             <div>
-              <h2 style={S.sectionTitle}>Vue d'ensemble — semaine du {(() => { const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long' }); })()}</h2>
 
-              {!overview ? <p style={S.loading}>Chargement…</p> : (
-                <>
-                  {/* Overview two-column: IRS left + KPIs right */}
-                  <div style={{ display: 'flex', gap: 24, marginBottom: 28, flexWrap: 'wrap' }}>
-                  {/* Bloc IRS taxe hebdomadaire — mis en avant */}
-                  <div style={{ ...S.irsBox, marginBottom: 0, flex: '0 0 auto', width: 'clamp(340px, 38%, 520px)' }}>
-                    <div style={S.irsLeft}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#991b1b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
-                        🏛️ Taxe IRS — Semaine en cours
-                      </div>
-                      <div style={{ fontSize: 36, fontWeight: 900, color: '#dc2626', lineHeight: 1 }}>
-                        {fmt(overview.weekTaxAmount)}
-                      </div>
-                      <div style={{ fontSize: 13, color: '#b91c1c', marginTop: 6 }}>
-                        à verser sur le compte IRS
-                      </div>
-                      {overview.weekTaxRate === 0 && (
-                        <div style={{ marginTop: 10, background: 'rgba(74,222,128,0.1)', color: '#4ade80', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 600 }}>
-                          ✅ Exonéré cette semaine
+              {/* ── Alertes prioritaires ───────────────────────── */}
+              {overview && overview.alertsCount > 0 && (
+                <div style={S.alertBanner}>
+                  ⚠️ <strong>{overview.alertsCount} matière{overview.alertsCount > 1 ? 's' : ''} première{overview.alertsCount > 1 ? 's' : ''}</strong> en stock bas !{' '}
+                  <button style={S.alertLink} onClick={() => setTab('stocks')}>Voir les stocks →</button>
+                </div>
+              )}
+
+              {/* Comptes en attente */}
+              {pendingUsers.filter(u => u.status === 'pending').length > 0 && (
+                <div style={S.pendingBox}>
+                  <div style={S.pendingTitle}>🔔 Comptes en attente ({pendingUsers.filter(u => u.status === 'pending').length})</div>
+                  <div style={S.pendingList}>
+                    {pendingUsers.filter(u => u.status === 'pending').map(u => (
+                      <div key={u.id} style={S.pendingRow}>
+                        <div style={S.pendingInfo}>
+                          <strong>{u.name}</strong>
+                          <span style={S.pendingEmail}>{u.email}</span>
+                          <span style={S.pendingDate}>Inscrit le {new Date(u.created_at).toLocaleDateString('fr-FR')}</span>
                         </div>
-                      )}
-                    </div>
-                    <div style={S.irsRight}>
-                      {/* Calcul détaillé */}
-                      <div style={S.irsRow}>
-                        <span>CA de la semaine</span>
-                        <strong>{fmt(overview.weekSales)}</strong>
+                        <div style={S.pendingActions}>
+                          <button style={S.btnApprove} onClick={() => handleAccountAction(u.id, 'approve')}>✅ Approuver</button>
+                          <button style={S.btnReject}  onClick={() => handleAccountAction(u.id, 'reject')}>❌ Refuser</button>
+                        </div>
                       </div>
-                      <div style={{ ...S.irsRow, color: '#d97706' }}>
-                        <span>− Achats matières premières</span>
-                        <strong>− {fmt(overview.weekPurchases)}</strong>
-                      </div>
-                      <div style={{ ...S.irsRow, color: '#7c3aed' }}>
-                        <span>− Salaires distribués</span>
-                        <strong>− {fmt(overview.weekSalaries)}</strong>
-                      </div>
-                      <div style={{ ...S.irsRow, borderTop: '2px solid #fca5a5', paddingTop: 10, marginTop: 6, fontWeight: 700, fontSize: 15 }}>
-                        <span>= Base imposable</span>
-                        <strong style={{ color: overview.weekNet < 0 ? '#fbbf24' : '#dc2626' }}>
-                          {overview.weekNet < 0 ? `Perte (${fmt(overview.weekNet)})` : fmt(overview.weekNet)}
-                        </strong>
-                      </div>
-                      <div style={{ marginTop: 12 }}>
-                        <TaxBracketBar net={Math.max(0, overview.weekNet)} rate={overview.weekTaxRate} bracket={overview.weekBracket} />
-                      </div>
-                    </div>
+                    ))}
                   </div>
+                </div>
+              )}
 
-                  {/* KPI Cards — right column */}
-                  <div style={{ ...S.kpiGrid, flex: 1, minWidth: 300, alignContent: 'start' }}>
-                    <div style={S.kpiCard}>
-                      <div style={S.kpiIcon}>💵</div>
-                      <div style={S.kpiLabel}>CA semaine</div>
-                      <div style={S.kpiValue}>{fmt(overview.weekSales)}</div>
-                    </div>
-                    <div style={{ ...S.kpiCard, borderColor: '#f59e0b' }}>
-                      <div style={S.kpiIcon}>🛍️</div>
-                      <div style={S.kpiLabel}>Achats semaine</div>
-                      <div style={{ ...S.kpiValue, color: '#d97706' }}>− {fmt(overview.weekPurchases)}</div>
-                    </div>
-                    <div style={{ ...S.kpiCard, borderColor: '#8b5cf6' }}>
-                      <div style={S.kpiIcon}>👥</div>
-                      <div style={S.kpiLabel}>Salaires semaine</div>
-                      <div style={{ ...S.kpiValue, color: '#7c3aed' }}>− {fmt(overview.weekSalaries)}</div>
-                    </div>
-                    <div style={{ ...S.kpiCard, borderColor: '#dc2626' }}>
-                      <div style={S.kpiIcon}>🏛️</div>
-                      <div style={S.kpiLabel}>Taxe IRS ({(overview.weekTaxRate * 100).toFixed(0)}%)</div>
-                      <div style={{ ...S.kpiValue, color: '#dc2626' }}>{fmt(overview.weekTaxAmount)}</div>
-                    </div>
-                    <div style={{ ...S.kpiCard, borderColor: (overview.weekNet - overview.weekTaxAmount) >= 0 ? '#16a34a' : '#dc2626' }}>
-                      <div style={S.kpiIcon}>📈</div>
-                      <div style={S.kpiLabel}>Bénéfice net après impôts</div>
-                      <div style={{ ...S.kpiValue, color: (overview.weekNet - overview.weekTaxAmount) >= 0 ? '#16a34a' : '#dc2626' }}>
-                        {fmt(Math.max(0, overview.weekNet) - overview.weekTaxAmount)}
-                      </div>
-                    </div>
-                  </div>{/* end kpiGrid */}
-                  </div>{/* end overview two-column outer flex */}
+              {!overview ? <p style={S.loading}>Chargement…</p> : (() => {
+                const netAfterTax = Math.max(0, overview.weekNet) - overview.weekTaxAmount;
+                const bal = balance?.currentBalance ?? null;
+                const balPos = bal === null || bal >= 0;
+                const weeks = balance?.weeklyHistory || [];
+                const maxAbs = Math.max(1, ...weeks.map(w => Math.abs(w.delta)));
+                const W = 300; const H = 50; const pad = 3;
+                const bw = weeks.length ? Math.floor((W - pad * 2) / weeks.length) - 2 : 30;
+                return (
+                  <>
+                    {/* ── 3 métriques hero ─────────────────────────────── */}
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))', gap:16, marginBottom:20 }}>
 
-                  {/* ── Solde Compte Bancaire ─────────────────────────── */}
-                  {balance && (() => {
-                    const bal      = balance.currentBalance;
-                    const isPos    = bal >= 0;
-                    const accent   = isPos ? '#16a34a' : '#dc2626';
-                    const accentBorder = isPos ? 'rgba(22,163,74,0.35)' : 'rgba(220,38,38,0.35)';
-                    const weeks    = balance.weeklyHistory || [];
-                    const maxAbs   = Math.max(1, ...weeks.map(w => Math.abs(w.delta)));
-                    const W = 400, H = 60, pad = 4;
-                    const bw = weeks.length ? Math.floor((W - pad * 2) / weeks.length) - 2 : 40;
-                    return (
-                      <div style={{ background: 'linear-gradient(135deg,#0a0618 0%,#110820 100%)', border: `2px solid ${accentBorder}`, borderRadius: 18, padding: '22px 26px', marginBottom: 28, boxShadow: `0 8px 40px rgba(0,0,0,0.55)` }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 20 }}>
-
-                          {/* Solde principal */}
-                          <div style={{ flex: '1 1 180px' }}>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: accent, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>🏦 Solde Compte Bancaire</div>
-                            <div style={{ fontSize: 40, fontWeight: 900, color: accent, lineHeight: 1, letterSpacing: -1 }}>{fmt(bal)}</div>
-                            <div style={{ fontSize: 12, color: '#6a4890', marginTop: 6 }}>
-                              Réf. {fmt(balance.refBalance)} · màj {new Date(balance.refDate).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' })}
-                            </div>
-                            {!editingBalance ? (
-                              <button onClick={() => { setEditingBalance(true); setNewBalanceVal(bal.toFixed(2)); }}
-                                style={{ marginTop: 12, padding: '6px 14px', background: 'rgba(224,64,251,0.12)', color: '#c084fc', border: '1px solid rgba(224,64,251,0.3)', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-                                ✏️ Recalibrer
-                              </button>
-                            ) : (
-                              <form onSubmit={handleUpdateBalance} style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                                <input type="number" step="0.01" value={newBalanceVal} onChange={e => setNewBalanceVal(e.target.value)}
-                                  style={{ ...S.input, width: 130, padding: '6px 10px', fontSize: 13 }} placeholder="Solde réel" autoFocus />
-                                <button type="submit" style={{ padding: '6px 14px', background: accent, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>✓</button>
-                                <button type="button" onClick={() => setEditingBalance(false)} style={{ padding: '6px 10px', background: 'rgba(255,255,255,0.06)', color: '#8060a0', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 12 }}>✕</button>
-                              </form>
-                            )}
-                          </div>
-
-                          {/* Décomposition */}
-                          <div style={{ flex: '1 1 200px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8, borderLeft: '1px solid rgba(255,255,255,0.06)', paddingLeft: 22 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#a080c8' }}>
-                              <span>Solde de référence</span><strong style={{ color: '#f0e8ff' }}>{fmt(balance.refBalance)}</strong>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#4ade80' }}>
-                              <span>+ Ventes encaissées</span><strong>+ {fmt(balance.salesSince)}</strong>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#f87171' }}>
-                              <span>− Achats réglés</span><strong>− {fmt(balance.purchasesSince)}</strong>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, fontWeight: 700, borderTop: `1px solid ${accentBorder}`, paddingTop: 8, marginTop: 4 }}>
-                              <span style={{ color: '#c0a0d8' }}> = Solde actuel</span><strong style={{ color: accent }}>{fmt(bal)}</strong>
-                            </div>
-                          </div>
-
-                          {/* Sparkline 8 semaines */}
-                          <div style={{ flex: '1 1 180px' }}>
-                            <div style={{ fontSize: 11, color: '#6a4890', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>Flux net · 8 sem.</div>
-                            <svg viewBox={`0 0 ${W} ${H + 18}`} style={{ width: '100%', maxWidth: W, height: 'auto', overflow: 'visible' }}>
-                              {weeks.map((w, i) => {
-                                const barH = Math.max(3, Math.round((Math.abs(w.delta) / maxAbs) * (H - pad * 2)));
-                                const x = pad + i * (bw + 2);
-                                const col = w.delta >= 0 ? '#16a34a' : '#dc2626';
-                                const barY = w.delta >= 0 ? H - pad - barH : H - pad;
+                      {/* Solde bancaire */}
+                      {bal !== null && (
+                        <div style={{ background:'linear-gradient(145deg,#0c0a1e,#13102a)', border:`2px solid ${balPos?'rgba(22,163,74,0.4)':'rgba(220,38,38,0.4)'}`, borderRadius:16, padding:'20px 22px' }}>
+                          <div style={{ fontSize:11, fontWeight:700, color: balPos?'#16a34a':'#dc2626', textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>🏦 Solde bancaire</div>
+                          <div style={{ fontSize:34, fontWeight:900, color: balPos?'#4ade80':'#f87171', lineHeight:1 }}>{fmt(bal)}</div>
+                          <div style={{ marginTop:10 }}>
+                            <svg viewBox={`0 0 ${W} ${H+14}`} style={{ width:'100%', maxWidth:W }}>
+                              {weeks.map((w,i) => {
+                                const bh = Math.max(2, Math.round((Math.abs(w.delta)/maxAbs)*(H-pad*2)));
+                                const x = pad + i*(bw+2);
+                                const col = w.delta>=0?'#16a34a':'#dc2626';
+                                const by = w.delta>=0 ? H-pad-bh : H-pad;
                                 const d = new Date(w.week_start);
-                                return (
-                                  <g key={i}>
-                                    <rect x={x} y={barY} width={bw} height={barH} rx={2} fill={col} opacity={0.8} />
-                                    <text x={x + bw / 2} y={H + 14} textAnchor="middle" fontSize="8" fill="#5a4080">{d.getDate()}/{d.getMonth()+1}</text>
-                                  </g>
-                                );
+                                return <g key={i}><rect x={x} y={by} width={bw} height={bh} rx={2} fill={col} opacity={0.75}/><text x={x+bw/2} y={H+12} textAnchor="middle" fontSize="7" fill="#5a4080">{d.getDate()}/{d.getMonth()+1}</text></g>;
                               })}
-                              <line x1={pad} y1={H - pad} x2={W - pad} y2={H - pad} stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+                              <line x1={pad} y1={H-pad} x2={W-pad} y2={H-pad} stroke="rgba(255,255,255,0.06)" strokeWidth="1"/>
                             </svg>
                           </div>
+                          {!editingBalance ? (
+                            <button onClick={()=>{setEditingBalance(true);setNewBalanceVal(bal.toFixed(2));}}
+                              style={{ marginTop:8, padding:'5px 12px', background:'rgba(224,64,251,0.1)', color:'#c084fc', border:'1px solid rgba(224,64,251,0.25)', borderRadius:7, cursor:'pointer', fontSize:11, fontWeight:600 }}>
+                              ✏️ Recalibrer
+                            </button>
+                          ) : (
+                            <form onSubmit={handleUpdateBalance} style={{ marginTop:8, display:'flex', gap:6, alignItems:'center' }}>
+                              <input type="number" step="0.01" value={newBalanceVal} onChange={e=>setNewBalanceVal(e.target.value)}
+                                style={{ ...S.input, width:110, padding:'5px 8px', fontSize:12 }} autoFocus />
+                              <button type="submit" style={{ padding:'5px 12px', background:'#16a34a', color:'#fff', border:'none', borderRadius:7, cursor:'pointer', fontWeight:700 }}>✓</button>
+                              <button type="button" onClick={()=>setEditingBalance(false)} style={{ padding:'5px 8px', background:'rgba(255,255,255,0.06)', color:'#8060a0', border:'none', borderRadius:7, cursor:'pointer' }}>✕</button>
+                            </form>
+                          )}
+                        </div>
+                      )}
 
+                      {/* Bénéfice net */}
+                      <div style={{ background:'linear-gradient(145deg,#0c0a1e,#13102a)', border:`2px solid ${netAfterTax>=0?'rgba(34,197,94,0.35)':'rgba(220,38,38,0.35)'}`, borderRadius:16, padding:'20px 22px' }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:'#22c55e', textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>📈 Bénéfice net — semaine</div>
+                        <div style={{ fontSize:34, fontWeight:900, color: netAfterTax>=0?'#4ade80':'#f87171', lineHeight:1 }}>{fmt(netAfterTax)}</div>
+                        <div style={{ marginTop:10, fontSize:13, color:'#7060a0' }}>après impôts IRS</div>
+                        <div style={{ marginTop:12, display:'flex', flexDirection:'column', gap:4 }}>
+                          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#9080b0' }}>
+                            <span>CA</span><span style={{ color:'#c0a0e8' }}>{fmt(overview.weekSales)}</span>
+                          </div>
+                          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#9080b0' }}>
+                            <span>Achats</span><span style={{ color:'#d97706' }}>− {fmt(overview.weekPurchases)}</span>
+                          </div>
+                          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#9080b0' }}>
+                            <span>Salaires</span><span style={{ color:'#7c3aed' }}>− {fmt(overview.weekSalaries)}</span>
+                          </div>
                         </div>
                       </div>
-                    );
-                  })()}
 
-                  {/* Historique des 4 semaines précédentes */}
-                  {overview.prevWeeks && overview.prevWeeks.some(w => w.sales > 0) && (
-                    <div style={{ marginBottom: 24 }}>
-                      <h3 style={S.subTitle}>Historique — 4 semaines précédentes</h3>
+                      {/* IRS */}
+                      <div style={{ background:'linear-gradient(145deg,#1a0505,#200a0a)', border:'2px solid rgba(220,38,38,0.4)', borderRadius:16, padding:'20px 22px' }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:'#991b1b', textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>🏛️ Taxe IRS — semaine</div>
+                        {overview.weekTaxRate === 0 ? (
+                          <>
+                            <div style={{ fontSize:34, fontWeight:900, color:'#4ade80', lineHeight:1 }}>0 $US</div>
+                            <div style={{ marginTop:10, background:'rgba(74,222,128,0.1)', color:'#4ade80', borderRadius:8, padding:'6px 12px', fontSize:13, fontWeight:600, display:'inline-block' }}>✅ Exonéré cette semaine</div>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ fontSize:34, fontWeight:900, color:'#dc2626', lineHeight:1 }}>{fmt(overview.weekTaxAmount)}</div>
+                            <div style={{ marginTop:6, fontSize:13, color:'#b91c1c' }}>à verser sur le compte IRS</div>
+                          </>
+                        )}
+                        <div style={{ marginTop:14 }}>
+                          <TaxBracketBar net={Math.max(0,overview.weekNet)} rate={overview.weekTaxRate} bracket={overview.weekBracket} />
+                        </div>
+                        <div style={{ marginTop:10, display:'flex', flexDirection:'column', gap:4 }}>
+                          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#9080b0' }}>
+                            <span>Base imposable</span>
+                            <span style={{ color: overview.weekNet<0?'#fbbf24':'#f87171', fontWeight:700 }}>
+                              {overview.weekNet<0?`Perte (${fmt(overview.weekNet)})`:fmt(overview.weekNet)}
+                            </span>
+                          </div>
+                          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#9080b0' }}>
+                            <span>Tranche</span><span style={{ color:'#c0a0e8' }}>{overview.weekBracket}</span>
+                          </div>
+                          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#9080b0' }}>
+                            <span>Taux effectif</span><span style={{ color:'#c0a0e8' }}>{(overview.weekTaxRate*100).toFixed(0)}%</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ── Historique 4 semaines ─────────────────────────── */}
+                    {overview.prevWeeks && overview.prevWeeks.some(w => w.sales > 0) && (
+                      <div style={{ marginBottom:20 }}>
+                        <h3 style={S.subTitle}>📅 Historique — 4 semaines précédentes</h3>
+                        <div style={S.tableWrap}>
+                          <table style={S.table}>
+                            <thead>
+                              <tr>
+                                <th style={S.th}>Semaine</th>
+                                <th style={S.th}>CA</th>
+                                <th style={S.th}>− Achats</th>
+                                <th style={S.th}>− Salaires</th>
+                                <th style={S.th}>Base imposable</th>
+                                <th style={S.th}>Tranche</th>
+                                <th style={S.th}>IRS</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {overview.prevWeeks.map((w,i) => (
+                                <tr key={i} style={S.tr}>
+                                  <td style={S.td}>Sem. du {new Date(w.weekStart).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})}</td>
+                                  <td style={S.td}>{fmt(w.sales)}</td>
+                                  <td style={{ ...S.td, color:'#d97706' }}>− {fmt(w.purchases)}</td>
+                                  <td style={{ ...S.td, color:'#7c3aed' }}>− {fmt(w.salaries)}</td>
+                                  <td style={{ ...S.td, fontWeight:600 }}>{fmt(w.net)}</td>
+                                  <td style={{ ...S.td, fontSize:12, color:'#8060a0' }}>{w.bracket}</td>
+                                  <td style={{ ...S.td, fontWeight:700, color: w.tax>0?'#dc2626':'#5a4080' }}>{fmt(w.tax)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Comptes refusés ───────────────────────────────── */}
+                    {pendingUsers.filter(u => u.status === 'rejected').length > 0 && (
+                      <div style={{ ...S.pendingBox, borderColor:'rgba(220,38,38,0.4)', background:'rgba(220,38,38,0.08)', marginBottom:16 }}>
+                        <div style={{ ...S.pendingTitle, color:'#dc2626' }}>❌ Comptes refusés ({pendingUsers.filter(u=>u.status==='rejected').length})</div>
+                        <div style={S.pendingList}>
+                          {pendingUsers.filter(u=>u.status==='rejected').map(u=>(
+                            <div key={u.id} style={S.pendingRow}>
+                              <div style={S.pendingInfo}><strong>{u.name}</strong><span style={S.pendingEmail}>{u.email}</span></div>
+                              <button style={S.btnApprove} onClick={()=>handleAccountAction(u.id,'approve')}>↩️ Réapprouver</button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Dernières ventes / devis ──────────────────────── */}
+                    <h3 style={S.subTitle}>🕐 Dernières transactions</h3>
+                    {overview.recentSales.length === 0 ? (
+                      <p style={S.empty}>Aucune transaction ce mois-ci.</p>
+                    ) : (
                       <div style={S.tableWrap}>
                         <table style={S.table}>
                           <thead>
                             <tr>
-                              <th style={S.th}>Semaine</th>
-                              <th style={S.th}>CA</th>
-                              <th style={S.th}>− Achats</th>
-                              <th style={S.th}>− Salaires</th>
-                              <th style={S.th}>Base imposable</th>
-                              <th style={S.th}>Tranche</th>
-                              <th style={S.th}>Taxe IRS</th>
+                              <th style={S.th}>Employé</th>
+                              <th style={S.th}>Produit / Client</th>
+                              <th style={S.th}>Montant</th>
+                              <th style={S.th}>Date</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {overview.prevWeeks.map((w, i) => (
-                              <tr key={i} style={S.tr}>
-                                <td style={S.td}>Sem. du {new Date(w.weekStart).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}</td>
-                                <td style={S.td}>{fmt(w.sales)}</td>
-                                <td style={{ ...S.td, color: '#d97706' }}>− {fmt(w.purchases)}</td>
-                                <td style={{ ...S.td, color: '#7c3aed' }}>− {fmt(w.salaries)}</td>
-                                <td style={{ ...S.td, fontWeight: 600 }}>{fmt(w.net)}</td>
-                                <td style={{ ...S.td, fontSize: 12, color: '#8060a0' }}>{w.bracket}</td>
-                                <td style={{ ...S.td, fontWeight: 700, color: w.tax > 0 ? '#dc2626' : '#5a4080' }}>{fmt(w.tax)}</td>
+                            {overview.recentSales.map(s => (
+                              <tr key={s.id} style={S.tr}>
+                                <td style={S.td}>{s.employee_name}</td>
+                                <td style={S.td}>{s.product_name}</td>
+                                <td style={{ ...S.td, fontWeight:600, color:'#4ade80' }}>{fmt(s.total_amount)}</td>
+                                <td style={{ ...S.td, color:'#5a4080', fontSize:13 }}>{fmtDate(s.sale_date)}</td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
                       </div>
-                    </div>
-                  )}
-
-                  {/* Alerte stock */}
-                  {overview.alertsCount > 0 && (
-                    <div style={S.alertBanner}>
-                      ⚠️ <strong>{overview.alertsCount} matière{overview.alertsCount > 1 ? 's' : ''} première{overview.alertsCount > 1 ? 's' : ''}</strong> en stock bas !{' '}
-                      <button style={S.alertLink} onClick={() => setTab('stocks')}>Voir les stocks →</button>
-                    </div>
-                  )}
-
-                  {/* Comptes en attente de validation */}
-                  {pendingUsers.filter(u => u.status === 'pending').length > 0 && (
-                    <div style={S.pendingBox}>
-                      <div style={S.pendingTitle}>
-                        🔔 Comptes en attente de validation ({pendingUsers.filter(u => u.status === 'pending').length})
-                      </div>
-                      <div style={S.pendingList}>
-                        {pendingUsers.filter(u => u.status === 'pending').map(u => (
-                          <div key={u.id} style={S.pendingRow}>
-                            <div style={S.pendingInfo}>
-                              <strong>{u.name}</strong>
-                              <span style={S.pendingEmail}>{u.email}</span>
-                              <span style={S.pendingDate}>Inscrit le {new Date(u.created_at).toLocaleDateString('fr-FR')}</span>
-                            </div>
-                            <div style={S.pendingActions}>
-                              <button style={S.btnApprove} onClick={() => handleAccountAction(u.id, 'approve')}>✅ Approuver</button>
-                              <button style={S.btnReject}  onClick={() => handleAccountAction(u.id, 'reject')}>❌ Refuser</button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Comptes refusés */}
-                  {pendingUsers.filter(u => u.status === 'rejected').length > 0 && (
-                    <div style={{ ...S.pendingBox, borderColor: 'rgba(220,38,38,0.4)', background: 'rgba(220,38,38,0.08)' }}>
-                      <div style={{ ...S.pendingTitle, color: '#dc2626' }}>
-                        ❌ Comptes refusés ({pendingUsers.filter(u => u.status === 'rejected').length})
-                      </div>
-                      <div style={S.pendingList}>
-                        {pendingUsers.filter(u => u.status === 'rejected').map(u => (
-                          <div key={u.id} style={S.pendingRow}>
-                            <div style={S.pendingInfo}>
-                              <strong>{u.name}</strong>
-                              <span style={S.pendingEmail}>{u.email}</span>
-                            </div>
-                            <button style={S.btnApprove} onClick={() => handleAccountAction(u.id, 'approve')}>↩️ Réapprouver</button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Dernières ventes */}
-                  <h3 style={S.subTitle}>Dernières ventes enregistrées</h3>
-                  {overview.recentSales.length === 0 ? (
-                    <p style={S.empty}>Aucune vente ce mois-ci. Allez dans "Salaires & Impôts" pour en ajouter.</p>
-                  ) : (
-                    <div style={S.tableWrap}>
-                      <table style={S.table}>
-                        <thead>
-                          <tr>
-                            <th style={S.th}>Employé</th>
-                            <th style={S.th}>Produit</th>
-                            <th style={S.th}>Qté</th>
-                            <th style={S.th}>Montant</th>
-                            <th style={S.th}>Date</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {overview.recentSales.map((s) => (
-                            <tr key={s.id} style={S.tr}>
-                              <td style={S.td}>{s.employee_name}</td>
-                              <td style={S.td}>{s.product_name}</td>
-                              <td style={S.td}>{s.quantity}</td>
-                              <td style={{ ...S.td, fontWeight: 600 }}>{fmt(s.total_amount)}</td>
-                              <td style={{ ...S.td, color: '#5a4080', fontSize: 13 }}>{fmtDate(s.sale_date)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </>
-              )}
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
 
-          {/* ══════════════════════════════════════════
+                    {/* ══════════════════════════════════════════
               ONGLET : VENTES (panier multi-produits)
           ══════════════════════════════════════════ */}
           {tab === 'ventes' && (
