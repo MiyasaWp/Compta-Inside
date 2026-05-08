@@ -9,10 +9,11 @@ export default async function handler(req, res) {
 
   const companyId = token.companyId;
 
-  // GET — liste des matières premières
+  // GET — liste des matières premières (inclut unit_price)
   if (req.method === 'GET') {
     const materials = await sql`
-      SELECT id, name, unit, quantity::float, min_alert::float
+      SELECT id, name, unit, quantity::float, min_alert::float,
+             COALESCE(unit_price, 0)::float AS unit_price
       FROM raw_materials
       WHERE company_id = ${companyId}
       ORDER BY name ASC
@@ -22,25 +23,31 @@ export default async function handler(req, res) {
 
   // POST — ajouter une matière première
   if (req.method === 'POST') {
-    const { name, unit, quantity, min_alert } = req.body;
+    const { name, unit, quantity, min_alert, unit_price } = req.body;
     if (!name) return res.status(400).json({ error: 'Nom obligatoire.' });
     const [m] = await sql`
-      INSERT INTO raw_materials (company_id, name, unit, quantity, min_alert)
-      VALUES (${companyId}, ${name}, ${unit || 'unité'}, ${quantity || 0}, ${min_alert || 5})
-      RETURNING id, name, unit, quantity::float, min_alert::float
+      INSERT INTO raw_materials (company_id, name, unit, quantity, min_alert, unit_price)
+      VALUES (
+        ${companyId}, ${name}, ${unit || 'unité'},
+        ${quantity || 0}, ${min_alert || 5},
+        ${parseFloat(unit_price) || 0}
+      )
+      RETURNING id, name, unit, quantity::float, min_alert::float,
+                COALESCE(unit_price, 0)::float AS unit_price
     `;
     return res.status(201).json(m);
   }
 
-  // PUT — modifier une matière première (nom, unité, seuil) ou ajuster le stock
+  // PUT — modifier une matière première (nom, unité, seuil, prix unitaire) ou ajuster le stock
   if (req.method === 'PUT') {
-    const { id, name, unit, quantity, min_alert } = req.body;
+    const { id, name, unit, quantity, min_alert, unit_price } = req.body;
     await sql`
       UPDATE raw_materials
-      SET name      = COALESCE(${name}, name),
-          unit      = COALESCE(${unit}, unit),
-          quantity  = COALESCE(${quantity !== undefined ? quantity : null}::numeric, quantity),
-          min_alert = COALESCE(${min_alert !== undefined ? min_alert : null}::numeric, min_alert)
+      SET name       = COALESCE(${name ?? null}, name),
+          unit       = COALESCE(${unit ?? null}, unit),
+          quantity   = COALESCE(${quantity   !== undefined ? quantity   : null}::numeric, quantity),
+          min_alert  = COALESCE(${min_alert  !== undefined ? min_alert  : null}::numeric, min_alert),
+          unit_price = COALESCE(${unit_price !== undefined ? parseFloat(unit_price) : null}::numeric, unit_price)
       WHERE id = ${id} AND company_id = ${companyId}
     `;
     return res.status(200).json({ success: true });

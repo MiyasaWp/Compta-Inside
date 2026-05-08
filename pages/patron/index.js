@@ -140,8 +140,13 @@ export default function PatronDashboard() {
   const [rmUnit, setRmUnit]       = useState('unité');
   const [rmQty, setRmQty]         = useState('0');
   const [rmAlert, setRmAlert]     = useState('5');
+  const [rmPrice, setRmPrice]     = useState('0');
   const [editingRm, setEditingRm] = useState(null);
   const [editingRmStock, setEditingRmStock] = useState(null);
+  // Stock donné / initial (sans achat)
+  const [giftRmId, setGiftRmId]   = useState(null); // id matière en cours de "stock donné"
+  const [giftQty, setGiftQty]     = useState('');
+  const [giftLabel, setGiftLabel] = useState('');
 
   // États UI
   const [loading, setLoading] = useState(false);
@@ -386,15 +391,15 @@ export default function PatronDashboard() {
     e.preventDefault();
     setLoading(true);
     const body = editingRm
-      ? { id: editingRm.id, name: rmName, unit: rmUnit, min_alert: parseFloat(rmAlert) }
-      : { name: rmName, unit: rmUnit, quantity: parseFloat(rmQty) || 0, min_alert: parseFloat(rmAlert) || 5 };
+      ? { id: editingRm.id, name: rmName, unit: rmUnit, min_alert: parseFloat(rmAlert), unit_price: parseFloat(rmPrice) || 0 }
+      : { name: rmName, unit: rmUnit, quantity: parseFloat(rmQty) || 0, min_alert: parseFloat(rmAlert) || 5, unit_price: parseFloat(rmPrice) || 0 };
     const r = await fetch('/api/patron/raw-materials', {
       method: editingRm ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
     setLoading(false);
-    if (r.ok) { showToast(editingRm ? 'Matière première modifiée !' : 'Matière première ajoutée !'); setEditingRm(null); setRmName(''); setRmUnit('unité'); setRmQty('0'); setRmAlert('5'); loadRawMaterials(); }
+    if (r.ok) { showToast(editingRm ? 'Matière première modifiée !' : 'Matière première ajoutée !'); setEditingRm(null); setRmName(''); setRmUnit('unité'); setRmQty('0'); setRmAlert('5'); setRmPrice('0'); loadRawMaterials(); }
     else { const d = await r.json(); showToast(d.error, 'error'); }
   }
 
@@ -407,6 +412,29 @@ export default function PatronDashboard() {
   async function handleUpdateRmStock(id, qty) {
     await fetch('/api/patron/raw-materials', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, quantity: parseFloat(qty) }) });
     showToast('Stock mis à jour !'); setEditingRmStock(null); loadRawMaterials(); loadOverview();
+  }
+
+  // Ajout de stock sans achat (stock initial / donné) — pas de débit du solde
+  async function handleGiftStock(e) {
+    e.preventDefault();
+    if (!giftRmId || !giftQty || parseFloat(giftQty) <= 0) return;
+    const r = await fetch('/api/patron/stock-movements', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        raw_material_id: giftRmId,
+        quantity: parseFloat(giftQty),
+        label: giftLabel || 'Stock initial / donné',
+      }),
+    });
+    const d = await r.json();
+    if (r.ok) {
+      showToast(`✅ Stock ajouté — nouveau total : ${d.new_qty}`);
+      setGiftRmId(null); setGiftQty(''); setGiftLabel('');
+      loadRawMaterials(); loadStockMovements();
+    } else {
+      showToast(d.error, 'error');
+    }
   }
 
   // ── Actions recettes produits ──────────────────────────────
@@ -1172,16 +1200,34 @@ export default function PatronDashboard() {
                       setAcMaterial(val);
                       const rm = rawMaterials.find(m => String(m.id) === String(val));
                       setAcName(rm ? rm.name : '');
+                      // Auto-fill prix du lot = prix_unitaire × qté par lot
+                      if (rm && rm.unit_price > 0) {
+                        const qty = parseFloat(acQty) || 1;
+                        setAcPrice(String((rm.unit_price * qty).toFixed(2)));
+                      }
                     }} required style={{ ...S.select, borderColor: acMaterial ? '#4ade80' : 'rgba(224,64,251,0.18)', background: acMaterial ? 'rgba(74,222,128,0.06)' : '#0a061a' }}>
                       <option value="">-- Sélectionner une matière première --</option>
                       {rawMaterials.map(m => (
-                        <option key={m.id} value={m.id}>{m.name} (stock actuel : {m.quantity} {m.unit})</option>
+                        <option key={m.id} value={m.id}>{m.name} — {m.unit_price > 0 ? fmt(m.unit_price)+'/'+m.unit : 'prix non défini'} (stock : {m.quantity} {m.unit})</option>
                       ))}
                     </select>
+                    {acMaterial && rawMaterials.find(m => String(m.id) === String(acMaterial))?.unit_price > 0 && (
+                      <div style={{ fontSize: 11, color: '#38bdf8', marginTop: 4 }}>
+                        💡 Prix unitaire enregistré : <strong>{fmt(rawMaterials.find(m => String(m.id) === String(acMaterial))?.unit_price)}/{rawMaterials.find(m => String(m.id) === String(acMaterial))?.unit}</strong> — prix du lot pré-rempli
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label style={S.label}>Qté par lot *</label>
-                    <input type="number" min="0.001" step="0.001" value={acQty} onChange={e => setAcQty(e.target.value)} required
+                    <input type="number" min="0.001" step="0.001" value={acQty} onChange={e => {
+                      const newQty = e.target.value;
+                      setAcQty(newQty);
+                      // Recalcule le prix du lot si la matière a un prix unitaire
+                      const rm = rawMaterials.find(m => String(m.id) === String(acMaterial));
+                      if (rm && rm.unit_price > 0 && parseFloat(newQty) > 0) {
+                        setAcPrice(String((rm.unit_price * parseFloat(newQty)).toFixed(2)));
+                      }
+                    }} required
                       placeholder="Ex: 24"
                       style={S.input} />
                     {acMaterial && <div style={{ fontSize: 12, color: '#8060a0', marginTop: 4 }}>unité : <strong>{rawMaterials.find(m => String(m.id) === String(acMaterial))?.unit || '—'}</strong></div>}
@@ -1774,9 +1820,14 @@ export default function PatronDashboard() {
                     <label style={S.label}>Unité</label>
                     <input value={rmUnit} onChange={e => setRmUnit(e.target.value)} placeholder="unité, kg, L…" style={S.input} />
                   </div>
+                  <div>
+                    <label style={S.label}>Prix unitaire ($)</label>
+                    <input type="number" min="0" step="0.01" value={rmPrice} onChange={e => setRmPrice(e.target.value)} placeholder="0.00" style={S.input} />
+                    <div style={{ fontSize: 11, color: '#8060a0', marginTop: 4 }}>Sera pré-rempli dans les achats</div>
+                  </div>
                   {!editingRm && (
                     <div>
-                      <label style={S.label}>Stock initial</label>
+                      <label style={S.label}>Stock initial <span style={{ fontWeight: 400, color: '#5a4080', fontSize: 11 }}>(ne débite pas le solde)</span></label>
                       <input type="number" min="0" step="0.01" value={rmQty} onChange={e => setRmQty(e.target.value)} placeholder="0" style={S.input} />
                     </div>
                   )}
@@ -1786,7 +1837,7 @@ export default function PatronDashboard() {
                   </div>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
                     {editingRm && (
-                      <button type="button" style={S.btnSecondary} onClick={() => { setEditingRm(null); setRmName(''); setRmUnit('unité'); setRmQty('0'); setRmAlert('5'); }}>Annuler</button>
+                      <button type="button" style={S.btnSecondary} onClick={() => { setEditingRm(null); setRmName(''); setRmUnit('unité'); setRmQty('0'); setRmAlert('5'); setRmPrice('0'); }}>Annuler</button>
                     )}
                     <button type="submit" style={S.btnPrimary} disabled={loading}>{loading ? 'Enregistrement…' : (editingRm ? 'Enregistrer' : '➕ Ajouter')}</button>
                   </div>
@@ -1813,6 +1864,7 @@ export default function PatronDashboard() {
                       <tr>
                         <th style={S.th}>Matière première</th>
                         <th style={S.th}>Unité</th>
+                        <th style={S.th}>Prix / unité</th>
                         <th style={S.th}>Stock actuel</th>
                         <th style={S.th}>Seuil alerte</th>
                         <th style={S.th}>Statut</th>
@@ -1829,8 +1881,26 @@ export default function PatronDashboard() {
                             </td>
                             <td style={S.td}><span style={S.chip}>{m.unit}</span></td>
                             <td style={S.td}>
+                              {m.unit_price > 0
+                                ? <span style={{ fontWeight: 700, color: '#fbbf24' }}>{fmt(m.unit_price)}</span>
+                                : <span style={{ color: '#5a4080', fontSize: 12 }}>—</span>}
+                            </td>
+                            <td style={S.td}>
                               {editingRmStock === m.id ? (
                                 <StockEditor current={m.quantity} onSave={(v) => handleUpdateRmStock(m.id, v)} onCancel={() => setEditingRmStock(null)} />
+                              ) : giftRmId === m.id ? (
+                                <form onSubmit={handleGiftStock} style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 160 }}>
+                                  <input type="number" min="0.01" step="0.01" placeholder="Qté reçue" value={giftQty}
+                                    onChange={e => setGiftQty(e.target.value)} required
+                                    style={{ ...S.input, padding: '5px 8px', fontSize: 13 }} />
+                                  <input placeholder="Raison (optionnel)" value={giftLabel}
+                                    onChange={e => setGiftLabel(e.target.value)}
+                                    style={{ ...S.input, padding: '5px 8px', fontSize: 12 }} />
+                                  <div style={{ display: 'flex', gap: 5 }}>
+                                    <button type="submit" style={{ ...S.btnSmall, color: '#4ade80', borderColor: '#4ade80' }}>✅</button>
+                                    <button type="button" style={S.btnSmall} onClick={() => { setGiftRmId(null); setGiftQty(''); setGiftLabel(''); }}>✕</button>
+                                  </div>
+                                </form>
                               ) : (
                                 <span style={{ fontSize: 16, fontWeight: 800, color: isLow ? '#dc2626' : '#e040fb' }}>{m.quantity}</span>
                               )}
@@ -1845,11 +1915,18 @@ export default function PatronDashboard() {
                               }
                             </td>
                             <td style={S.td}>
-                              <div style={{ display: 'flex', gap: 6 }}>
-                                {editingRmStock !== m.id && (
-                                  <button style={S.btnSmall} onClick={() => setEditingRmStock(m.id)}>📦 Stock</button>
+                              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                {editingRmStock !== m.id && giftRmId !== m.id && (
+                                  <button style={S.btnSmall} onClick={() => { setEditingRmStock(m.id); setGiftRmId(null); }}>📦 Ajuster</button>
                                 )}
-                                <button style={S.btnSmall} onClick={() => { setEditingRm(m); setRmName(m.name); setRmUnit(m.unit); setRmAlert(String(m.min_alert)); }}>✏️ Modifier</button>
+                                {giftRmId !== m.id && editingRmStock !== m.id && (
+                                  <button style={{ ...S.btnSmall, color: '#4ade80', borderColor: '#4ade80' }}
+                                    onClick={() => { setGiftRmId(m.id); setGiftQty(''); setGiftLabel(''); setEditingRmStock(null); }}
+                                    title="Ajouter du stock sans créer d'achat (stock donné, stock de départ)">
+                                    🎁 Donné
+                                  </button>
+                                )}
+                                <button style={S.btnSmall} onClick={() => { setEditingRm(m); setRmName(m.name); setRmUnit(m.unit); setRmAlert(String(m.min_alert)); setRmPrice(String(m.unit_price ?? 0)); }}>✏️ Modifier</button>
                                 <button style={{ ...S.btnSmall, color: '#dc2626', borderColor: '#fca5a5' }} onClick={() => handleDeleteRm(m.id)}>🗑️</button>
                               </div>
                             </td>
@@ -1888,11 +1965,12 @@ export default function PatronDashboard() {
                             {stockMovements.map(mv => {
                               const isIn  = mv.quantity_change > 0;
                               const typeLabel = {
-                                purchase:        { label: '📥 Achat',        color: '#4ade80' },
-                                sale:            { label: '📤 Vente',         color: '#ef4444' },
-                                adjustment:      { label: '✏️ Ajustement',   color: '#fbbf24' },
-                                purchase_cancel: { label: '↩️ Annul. achat', color: '#f97316' },
-                                sale_cancel:     { label: '↩️ Annul. vente', color: '#a78bfa' },
+                                purchase:        { label: '📥 Achat',          color: '#4ade80' },
+                                sale:            { label: '📤 Vente',           color: '#ef4444' },
+                                adjustment:      { label: '✏️ Ajustement',     color: '#fbbf24' },
+                                initial:         { label: '🎁 Stock donné',    color: '#38bdf8' },
+                                purchase_cancel: { label: '↩️ Annul. achat',   color: '#f97316' },
+                                sale_cancel:     { label: '↩️ Annul. vente',   color: '#a78bfa' },
                               }[mv.movement_type] || { label: mv.movement_type, color: '#8060a0' };
                               return (
                                 <tr key={mv.id} style={S.tr}>
@@ -2441,96 +2519,57 @@ const S = {
     background: 'linear-gradient(135deg, #7c3aed, #9f67fa)',
     color: '#fff', border: 'none', borderRadius: 9,
     cursor: 'pointer', fontSize: 14, fontWeight: 700,
-    boxShadow: '0 4px 16px rgba(124,58,237,0.35)',
-    transition: 'all 0.15s',
+    transition: 'opacity 0.15s',
   },
   btnSecondary: {
-    padding: '9px 18px',
-    background: 'rgba(224,64,251,0.07)',
-    color: '#c090e0',
-    border: '1px solid rgba(224,64,251,0.22)',
-    borderRadius: 9, cursor: 'pointer', fontSize: 14, fontWeight: 500,
+    padding: '8px 18px', background: 'rgba(255,255,255,0.06)',
+    color: '#c084fc', border: '1px solid rgba(224,64,251,0.25)',
+    borderRadius: 9, cursor: 'pointer', fontSize: 14, fontWeight: 600,
   },
   btnSmall: {
-    padding: '5px 11px',
-    background: 'rgba(224,64,251,0.06)',
-    color: '#9060b0',
-    border: '1px solid rgba(224,64,251,0.15)',
-    borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 500,
+    padding: '5px 12px', fontSize: 12, fontWeight: 600,
+    background: 'rgba(255,255,255,0.04)', color: '#c084fc',
+    border: '1px solid rgba(224,64,251,0.2)', borderRadius: 7, cursor: 'pointer',
+  },
+  btnApprove: {
+    padding: '7px 16px', fontSize: 13, fontWeight: 700,
+    background: 'rgba(74,222,128,0.12)', color: '#4ade80',
+    border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, cursor: 'pointer',
+  },
+  btnReject: {
+    padding: '7px 16px', fontSize: 13, fontWeight: 700,
+    background: 'rgba(220,38,38,0.1)', color: '#f87171',
+    border: '1px solid rgba(248,113,113,0.3)', borderRadius: 8, cursor: 'pointer',
   },
 
-  // ── Formulaires
   formCard: {
-    background: 'linear-gradient(145deg, #16102a, #1e1435)',
+    background: 'linear-gradient(145deg, #0e0820, #160d30)',
     border: '1px solid rgba(224,64,251,0.15)',
-    borderRadius: 16, padding: '22px', marginBottom: 20,
-    boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+    borderRadius: 14, padding: '22px 24px', marginBottom: 24,
   },
-  formGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, alignItems: 'start' },
-  form: { display: 'flex', flexDirection: 'column', gap: 12 },
-  label: { fontSize: 12, fontWeight: 700, color: '#8060a0', marginBottom: 5, display: 'block', textTransform: 'uppercase', letterSpacing: 0.6 },
+  formGrid: {
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    gap: 16, alignItems: 'start',
+  },
+  label: { display: 'block', fontSize: 12, fontWeight: 700, color: '#8060a0', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
   input: {
-    width: '100%', padding: '10px 14px',
-    border: '1.5px solid rgba(224,64,251,0.2)',
-    borderRadius: 9, fontSize: 14, color: '#f0e8ff',
-    background: 'rgba(0,0,0,0.35)', boxSizing: 'border-box', outline: 'none',
-    transition: 'border-color 0.15s, box-shadow 0.15s',
+    width: '100%', padding: '9px 13px', borderRadius: 9, fontSize: 14,
+    background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(224,64,251,0.2)',
+    color: '#f0e8ff', outline: 'none', boxSizing: 'border-box',
+    transition: 'border-color 0.2s',
   },
   select: {
-    width: '100%', padding: '10px 14px',
-    border: '1.5px solid rgba(224,64,251,0.2)',
-    borderRadius: 9, fontSize: 14, color: '#f0e8ff',
-    background: 'rgba(0,0,0,0.35)', boxSizing: 'border-box',
-    transition: 'border-color 0.15s',
+    width: '100%', padding: '9px 13px', borderRadius: 9, fontSize: 14,
+    background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(224,64,251,0.2)',
+    color: '#f0e8ff', outline: 'none', boxSizing: 'border-box', cursor: 'pointer',
   },
-  calcPreview: {
-    padding: '11px 15px',
-    background: 'rgba(224,64,251,0.06)',
-    border: '1px solid rgba(224,64,251,0.18)',
-    borderRadius: 9, fontSize: 14, color: '#c090e0',
-  },
-
-  modal: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16, backdropFilter: 'blur(6px)' },
-  modalBox: {
-    background: '#16102a', borderRadius: 20, padding: 32,
-    width: '100%', maxWidth: 440,
-    border: '1px solid rgba(224,64,251,0.22)',
-    boxShadow: '0 32px 80px rgba(0,0,0,0.8), 0 0 40px rgba(224,64,251,0.08)',
-  },
-  modalTitle: { fontSize: 20, fontWeight: 700, color: '#f0e8ff', marginBottom: 20 },
-  modalActions: { display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 },
   qtyBtn2: {
-    width: 30, height: 30,
-    border: '1px solid rgba(224,64,251,0.22)',
-    borderRadius: 7, background: 'rgba(224,64,251,0.08)',
-    cursor: 'pointer', fontSize: 17, fontWeight: 700, color: '#c090e0',
+    width: 28, height: 28, borderRadius: 6, border: '1px solid rgba(224,64,251,0.25)',
+    background: 'rgba(224,64,251,0.08)', color: '#e040fb',
+    fontSize: 16, fontWeight: 700, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
   },
 
-  // ── Validation comptes
-  pendingBox:     { background: '#130a28', border: '1px solid rgba(224,64,251,0.25)', borderRadius: 14, padding: '18px 22px', marginBottom: 22, boxShadow: '0 4px 20px rgba(0,0,0,0.4)' },
-  pendingTitle:   { fontWeight: 700, fontSize: 16, color: '#e060ff', marginBottom: 14 },
-  pendingList:    { display: 'flex', flexDirection: 'column', gap: 10 },
-  pendingRow:     { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: '13px 16px', flexWrap: 'wrap', gap: 10, border: '1px solid rgba(224,64,251,0.1)' },
-  pendingInfo:    { display: 'flex', flexDirection: 'column', gap: 3 },
-  pendingEmail:   { fontSize: 14, color: '#7050a0' },
-  pendingDate:    { fontSize: 13, color: '#4a3070' },
-  pendingActions: { display: 'flex', gap: 8 },
-  btnApprove:     { padding: '7px 16px', background: 'linear-gradient(135deg,#15803d,#16a34a)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600, boxShadow: '0 2px 10px rgba(22,163,74,0.3)' },
-  btnReject:      { padding: '7px 16px', background: 'linear-gradient(135deg,#b91c1c,#dc2626)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600, boxShadow: '0 2px 10px rgba(220,38,38,0.3)' },
-  // ── Bloc IRS — rouge sur fond sombre cosmique
-  irsBox: {
-    background: 'linear-gradient(135deg, #1a0510 0%, #220818 50%, #160830 100%)',
-    border: '2px solid rgba(220,38,38,0.3)',
-    borderRadius: 18, padding: '24px 28px', marginBottom: 28,
-    display: 'flex', gap: 24, flexWrap: 'wrap',
-    boxShadow: '0 8px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(220,38,38,0.08)',
-  },
-  irsLeft: { flex: '1 1 200px', minWidth: 180 },
-  irsTitle: { fontSize: 12, fontWeight: 700, color: '#b91c1c', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 },
-  irsRight: { flex: '2 1 300px', display: 'flex', flexDirection: 'column', gap: 6 },
-  irsRow: { display: 'flex', justifyContent: 'space-between', fontSize: 15, color: '#c0a0d8', paddingBottom: 6 },
-
-  // ── Récap achats / déductions fiscales
   purchaseSummary: {
     display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 24,
     background: 'linear-gradient(145deg,#120c22,#1a1030)',
@@ -2542,4 +2581,12 @@ const S = {
   pSumLabel: { fontSize: 12, color: '#6a4890', marginBottom: 7, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6 },
   pSumValue: { fontSize: 24, fontWeight: 800, color: '#f0e8ff', letterSpacing: -0.3 },
 
+  pendingList:    { display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 },
+  pendingBox:     { background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 12, padding: '16px 18px' },
+  pendingRow:     { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' },
+  pendingInfo:    { display: 'flex', flexDirection: 'column', gap: 4 },
+  pendingTitle:   { fontSize: 15, fontWeight: 700, color: '#f0e8ff' },
+  pendingEmail:   { fontSize: 13, color: '#8060a0' },
+  pendingDate:    { fontSize: 12, color: '#5a4080', marginTop: 2 },
+  pendingActions: { display: 'flex', gap: 8, alignItems: 'center' },
 };
