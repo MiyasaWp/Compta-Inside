@@ -2542,5 +2542,4 @@ const S = {
   pSumLabel: { fontSize: 12, color: '#6a4890', marginBottom: 7, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6 },
   pSumValue: { fontSize: 24, fontWeight: 800, color: '#f0e8ff', letterSpacing: -0.3 },
 
-  // ── Ventes / Panier
-  cwHeader: { background: 'linear-gradient(135deg, #160830 0%, #200c40 100%)', borderRadius: 14, padding: '18px 22px', marginBottom: 20, border: '1px solid 
+};
