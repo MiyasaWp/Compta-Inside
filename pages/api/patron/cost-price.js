@@ -10,7 +10,7 @@ export default async function handler(req, res) {
 
   const companyId = token.companyId;
 
-  // Prix moyen pondéré d'achat par matière première (sur tout l'historique)
+  // 1. Prix moyen pondéré d'achat par matière première (sur tout l'historique)
   const avgPrices = await sql`
     SELECT raw_material_id,
            (SUM(total_amount) / NULLIF(SUM(quantity), 0))::float AS avg_unit_price
@@ -18,12 +18,30 @@ export default async function handler(req, res) {
     WHERE company_id = ${companyId} AND raw_material_id IS NOT NULL
     GROUP BY raw_material_id
   `;
-  const priceMap = {};
+  const purchaseMap = {};
   for (const row of avgPrices) {
-    priceMap[row.raw_material_id] = row.avg_unit_price;
+    purchaseMap[row.raw_material_id] = row.avg_unit_price;
   }
 
-  // Tous les produits
+  // 2. Prix unitaire saisi manuellement sur chaque matière première
+  const rmPrices = await sql`
+    SELECT id, COALESCE(unit_price, 0)::float AS unit_price
+    FROM raw_materials
+    WHERE company_id = ${companyId}
+  `;
+  const rmPriceMap = {};
+  for (const row of rmPrices) {
+    rmPriceMap[row.id] = row.unit_price;
+  }
+
+  // Priorité : prix moyen d'achat > prix unitaire manuel > null
+  const getPriceForRM = (rmId) => {
+    if (purchaseMap[rmId] != null && purchaseMap[rmId] > 0) return { price: purchaseMap[rmId], source: 'achat' };
+    if (rmPriceMap[rmId] != null && rmPriceMap[rmId] > 0) return { price: rmPriceMap[rmId], source: 'manuel' };
+    return { price: null, source: null };
+  };
+
+  // 3. Tous les produits
   const products = await sql`
     SELECT id, name, category, price::float, image_url
     FROM products
@@ -31,7 +49,7 @@ export default async function handler(req, res) {
     ORDER BY name ASC
   `;
 
-  // Toutes les recettes de l'entreprise
+  // 4. Toutes les recettes de l'entreprise
   const recipes = await sql`
     SELECT pr.product_id, pr.raw_material_id, pr.quantity_per_unit::float,
            rm.name AS material_name, rm.unit
@@ -40,7 +58,7 @@ export default async function handler(req, res) {
     WHERE pr.company_id = ${companyId}
   `;
 
-  // Calculer le coût de revient de chaque produit
+  // 5. Calculer le coût de revient de chaque produit
   const result = products.map(p => {
     const ingredients = recipes.filter(r => r.product_id === p.id);
 
@@ -52,14 +70,14 @@ export default async function handler(req, res) {
     let hasMissingPrice = false;
 
     const enrichedIngredients = ingredients.map(r => {
-      const unitPrice = priceMap[r.raw_material_id] ?? null;
+      const { price: unitPrice, source } = getPriceForRM(r.raw_material_id);
       if (unitPrice === null) {
         hasMissingPrice = true;
-        return { ...r, unit_price: null, cost: null };
+        return { ...r, unit_price: null, cost: null, price_source: null };
       }
       const cost = r.quantity_per_unit * unitPrice;
       costPrice += cost;
-      return { ...r, unit_price: unitPrice, cost };
+      return { ...r, unit_price: unitPrice, cost, price_source: source };
     });
 
     if (hasMissingPrice) {
@@ -69,7 +87,7 @@ export default async function handler(req, res) {
         margin: null,
         margin_pct: null,
         ingredients: enrichedIngredients,
-        warning: 'Prix d\'achat manquant pour un ou plusieurs ingrédients',
+        warning: 'Prix manquant pour un ou plusieurs ingrédients',
       };
     }
 
