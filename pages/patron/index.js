@@ -2420,169 +2420,85 @@ function SalaryEditor({ current, onSave, onCancel }) {
 
 // ─── Styles — Design System v2 ────────────────────────────────
 const S = {
-  page: { minHeight: '100vh', background: '#080614', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" },
-  loadingPage: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#080614' },
-  spinner: { width: 44, height: 44, border: '4px solid #2a1050', borderTop: '4px solid #e040fb', borderRadius: '50%', animation: 'spin 0.8s linear infinite' },
-  toast: { position: 'fixed', top: 20, right: 20, zIndex: 9999, padding: '13px 22px', borderRadius: 12, color: '#fff', fontWeight: 600, fontSize: 15, boxShadow: '0 8px 32px rgba(0,0,0,0.6)' },
+  // ── Page shell
+  page:    { background: '#06040f', minHeight: '100vh', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif", color: '#f4eeff' },
+  nav: {}, main: {}, tabBar: {},
 
-  // ── Barre de recherche
-  searchInput: {
-    width: '100%',
-    maxWidth: 420,
-    padding: '10px 14px',
-    border: '1.5px solid rgba(224,64,251,0.18)',
-    borderRadius: 9,
-    fontSize: 14,
-    color: '#f0e8ff',
-    background: 'rgba(255,255,255,0.03)',
-    boxSizing: 'border-box',
-    outline: 'none',
-    fontFamily: "'Segoe UI', system-ui, Arial, sans-serif",
-  },
+  // ── Section typography
+  sectionTitle:  { fontSize: 20, fontWeight: 800, color: '#f4eeff', marginBottom: 20, letterSpacing: -0.3 },
+  subTitle:      { fontSize: 15, fontWeight: 700, color: '#8a72c0', marginBottom: 16, letterSpacing: -0.2 },
+  sectionHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
 
-  // ── Navigation cosmique
-  nav: {},
-  navLeft: {},
-  navRight: {},
-  navLogo: {},
-  navCompany: {},
-  navUser: {},
-  navBtn: {},
+  // ── KPI cards
+  kpiGrid:  { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 16, marginBottom: 28 },
+  kpiCard:  { background: 'linear-gradient(145deg,#110e28,#181430)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 20, padding: '20px 22px', boxShadow: '0 4px 16px rgba(0,0,0,0.55)', transition: 'border-color 0.2s,box-shadow 0.2s,transform 0.2s' },
+  kpiLabel: { fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#8a72c0', marginBottom: 8 },
+  kpiValue: { fontSize: 34, fontWeight: 900, lineHeight: 1, letterSpacing: -1.5, color: '#f4eeff', fontVariantNumeric: 'tabular-nums' },
+  kpiIcon:  { fontSize: 22, marginBottom: 10, display: 'block' },
 
-  main: {},
-  sectionTitle: { fontSize: 22, fontWeight: 700, color: '#f0e8ff', marginBottom: 20, letterSpacing: -0.3 },
-  sectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 8 },
-  subTitle: { fontSize: 12, fontWeight: 700, color: '#8060a0', marginBottom: 14, textTransform: 'uppercase', letterSpacing: 1 },
-  loading: { color: '#5a4080', fontStyle: 'italic' },
-  empty: {
-    color: '#5a4080', textAlign: 'center', padding: '48px 24px',
-    background: 'rgba(255,255,255,0.015)', borderRadius: 16,
-    border: '1px dashed rgba(224,64,251,0.12)',
-    fontSize: 15,
-  },
+  // ── Tables
+  tableWrap: { overflowX: 'auto', borderRadius: 14, border: '1px solid rgba(255,255,255,0.06)', background: '#110e28', boxShadow: '0 1px 4px rgba(0,0,0,0.4)' },
+  table:     { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 },
+  th:        { padding: '12px 18px', textAlign: 'left', fontSize: 10.5, fontWeight: 700, color: '#5a4490', textTransform: 'uppercase', letterSpacing: 0.9, borderBottom: '1px solid rgba(255,255,255,0.06)', whiteSpace: 'nowrap', background: 'rgba(6,4,15,0.7)', position: 'sticky', top: 0 },
+  tr:        { borderBottom: '1px solid rgba(255,255,255,0.035)', transition: 'background 0.1s' },
+  td:        { padding: '13px 18px', fontSize: 13.5, color: '#c4b0e8', verticalAlign: 'middle', lineHeight: 1.45 },
+  tdNum:     { padding: '13px 18px', fontSize: 14, fontWeight: 700, textAlign: 'right', verticalAlign: 'middle', fontVariantNumeric: 'tabular-nums' },
+  tdDim:     { padding: '13px 18px', fontSize: 12, color: '#5a4490', verticalAlign: 'middle' },
 
-  // ── KPI cards — surface violet sombre avec halo rose
-  kpiGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16, marginBottom: 28 },
-  kpiCard: {
-    background: 'linear-gradient(145deg, #16102a, #1e1435)',
-    borderRadius: 16, padding: '20px 18px',
-    border: '1px solid rgba(224,64,251,0.15)',
-    boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-    transition: 'border-color 0.2s, box-shadow 0.2s, transform 0.2s',
-  },
-  kpiIcon: { fontSize: 30, marginBottom: 10 },
-  kpiLabel: { fontSize: 12, color: '#6a4890', marginBottom: 6, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.7 },
-  kpiValue: { fontSize: 30, fontWeight: 800, color: '#f0e8ff', letterSpacing: -0.5 },
+  // ── Form cards
+  formCard: { background: 'linear-gradient(145deg,#110e28,#181430)', border: '1px solid rgba(124,58,237,0.18)', borderRadius: 14, padding: '22px 24px', marginBottom: 24, boxShadow: '0 4px 16px rgba(0,0,0,0.55)' },
+  formGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 16, alignItems: 'start' },
 
-  alertBanner: {
-    background: 'rgba(224,64,251,0.06)',
-    border: '1px solid rgba(224,64,251,0.25)',
-    borderRadius: 12, padding: '12px 18px', marginBottom: 18,
-    color: '#e080ff', fontSize: 14, fontWeight: 500,
-    backdropFilter: 'blur(8px)',
-  },
-  alertLink: { background: 'none', border: 'none', color: '#f060ff', cursor: 'pointer', fontWeight: 700, textDecoration: 'underline', fontSize: 14 },
+  // ── Form elements
+  label:       { display: 'block', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6, color: '#8a72c0', marginBottom: 6 },
+  input:       { width: '100%', padding: '10px 14px', background: 'rgba(0,0,0,0.4)', border: '1.5px solid rgba(124,58,237,0.2)', borderRadius: 10, fontSize: 14, color: '#f4eeff', boxSizing: 'border-box', transition: 'border-color 0.15s' },
+  select:      { width: '100%', padding: '10px 14px', background: 'rgba(0,0,0,0.4)', border: '1.5px solid rgba(124,58,237,0.2)', borderRadius: 10, fontSize: 14, color: '#f4eeff', boxSizing: 'border-box', cursor: 'pointer' },
+  searchInput: { width: '100%', padding: '9px 14px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 99, fontSize: 13, color: '#f4eeff', marginBottom: 12 },
 
-  taxBox: {
-    background: '#120c22', border: '1px solid rgba(224,64,251,0.18)',
-    borderRadius: 14, padding: '20px 24px', marginBottom: 24,
-    display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 420,
-    boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-  },
-  taxRow: { display: 'flex', justifyContent: 'space-between', fontSize: 16, color: '#c0a0d8' },
+  // ── Buttons
+  btnPrimary:   { padding: '10px 20px', background: 'linear-gradient(135deg,#7c3aed,#9f67fa)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13.5, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 14px rgba(124,58,237,0.4)', transition: 'all 0.15s', whiteSpace: 'nowrap' },
+  btnSecondary: { padding: '9px 18px', background: 'transparent', border: '1.5px solid rgba(124,58,237,0.3)', color: '#9f67fa', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' },
+  btnSmall:     { padding: '5px 11px', fontSize: 12, fontWeight: 600, background: 'rgba(255,255,255,0.04)', color: '#8a72c0', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 7, cursor: 'pointer', whiteSpace: 'nowrap' },
+  btnApprove:   { padding: '6px 14px', fontSize: 12.5, fontWeight: 700, background: 'rgba(52,211,153,0.1)', color: '#34d399', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 8, cursor: 'pointer' },
+  btnReject:    { padding: '6px 14px', fontSize: 12.5, fontWeight: 700, background: 'rgba(248,113,113,0.1)', color: '#f87171', border: '1px solid rgba(248,113,113,0.25)', borderRadius: 8, cursor: 'pointer' },
 
-  // ── Tableaux
-  tableWrap: { overflowX: 'auto', borderRadius: 14, boxShadow: '0 4px 24px rgba(0,0,0,0.4)', border: '1px solid rgba(224,64,251,0.12)' },
-  table: { width: '100%', borderCollapse: 'collapse', background: '#0e0a1e', minWidth: 500 },
-  th: {
-    background: 'rgba(0,0,0,0.5)', padding: '13px 18px', textAlign: 'left',
-    fontSize: 11, fontWeight: 700, color: '#7060a0',
-    textTransform: 'uppercase', letterSpacing: 1,
-    borderBottom: '2px solid rgba(224,64,251,0.18)',
-    whiteSpace: 'nowrap', position: 'sticky', top: 0,
-  },
-  tr: { borderBottom: '1px solid rgba(255,255,255,0.04)', transition: 'background 0.1s' },
-  td: { padding: '14px 18px', fontSize: 14, color: '#c0a0d8', verticalAlign: 'middle', lineHeight: 1.4 },
-  tdNum: { padding: '14px 18px', fontSize: 15, fontWeight: 700, textAlign: 'right', verticalAlign: 'middle', fontVariantNumeric: 'tabular-nums' },
-  tdMuted: { padding: '14px 18px', fontSize: 12, color: '#5a4080', verticalAlign: 'middle' },
+  // ── Badges
+  badge:  { padding: '3px 10px', borderRadius: 99, fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap' },
+  chip:   { background: 'rgba(124,58,237,0.15)', color: '#9f67fa', padding: '3px 10px', borderRadius: 99, fontSize: 11.5, fontWeight: 600, display: 'inline-block' },
 
-  badge: { padding: '3px 10px', borderRadius: 20, fontSize: 13, fontWeight: 600 },
-  chip: { background: 'rgba(224,64,251,0.12)', color: '#e040fb', padding: '3px 10px', borderRadius: 20, fontSize: 13, fontWeight: 500 },
+  // ── States
+  empty:       { textAlign: 'center', color: '#5a4490', padding: '60px 24px', fontSize: 14, background: 'rgba(255,255,255,0.012)', borderRadius: 14, border: '1px dashed rgba(255,255,255,0.06)' },
+  loading:     { textAlign: 'center', color: '#5a4490', padding: '40px', fontSize: 14 },
+  loadingPage: { display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', color: '#8a72c0', fontSize: 16, gap: 12 },
+  spinner:     { display: 'inline-block', width: 20, height: 20, border: '2.5px solid rgba(124,58,237,0.2)', borderTopColor: '#7c3aed', borderRadius: '50%', animation: 'spin 0.7s linear infinite' },
 
-  // ── Boutons rose magenta lumineux
-  btnPrimary: {
-    padding: '9px 20px',
-    background: 'linear-gradient(135deg, #7c3aed, #9f67fa)',
-    color: '#fff', border: 'none', borderRadius: 9,
-    cursor: 'pointer', fontSize: 14, fontWeight: 700,
-    transition: 'opacity 0.15s',
-  },
-  btnSecondary: {
-    padding: '8px 18px', background: 'rgba(255,255,255,0.06)',
-    color: '#c084fc', border: '1px solid rgba(224,64,251,0.25)',
-    borderRadius: 9, cursor: 'pointer', fontSize: 14, fontWeight: 600,
-  },
-  btnSmall: {
-    padding: '5px 12px', fontSize: 12, fontWeight: 600,
-    background: 'rgba(255,255,255,0.04)', color: '#c084fc',
-    border: '1px solid rgba(224,64,251,0.2)', borderRadius: 7, cursor: 'pointer',
-  },
-  btnApprove: {
-    padding: '7px 16px', fontSize: 13, fontWeight: 700,
-    background: 'rgba(74,222,128,0.12)', color: '#4ade80',
-    border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, cursor: 'pointer',
-  },
-  btnReject: {
-    padding: '7px 16px', fontSize: 13, fontWeight: 700,
-    background: 'rgba(220,38,38,0.1)', color: '#f87171',
-    border: '1px solid rgba(248,113,113,0.3)', borderRadius: 8, cursor: 'pointer',
-  },
+  // ── Toast
+  toast: { position: 'fixed', top: 20, right: 20, zIndex: 9999, padding: '12px 20px', borderRadius: 10, color: '#fff', fontWeight: 600, fontSize: 13.5, boxShadow: '0 8px 32px rgba(0,0,0,0.7)', animation: 'fadeUp 0.2s ease both', maxWidth: 'calc(100vw - 40px)', minWidth: 220 },
 
-  formCard: {
-    background: 'linear-gradient(145deg, #0e0820, #160d30)',
-    border: '1px solid rgba(224,64,251,0.15)',
-    borderRadius: 14, padding: '22px 24px', marginBottom: 24,
-  },
-  formGrid: {
-    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-    gap: 16, alignItems: 'start',
-  },
-  label: { display: 'block', fontSize: 12, fontWeight: 700, color: '#8060a0', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
-  input: {
-    width: '100%', padding: '9px 13px', borderRadius: 9, fontSize: 14,
-    background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(224,64,251,0.2)',
-    color: '#f0e8ff', outline: 'none', boxSizing: 'border-box',
-    transition: 'border-color 0.2s',
-  },
-  select: {
-    width: '100%', padding: '9px 13px', borderRadius: 9, fontSize: 14,
-    background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(224,64,251,0.2)',
-    color: '#f0e8ff', outline: 'none', boxSizing: 'border-box', cursor: 'pointer',
-  },
-  qtyBtn2: {
-    width: 28, height: 28, borderRadius: 6, border: '1px solid rgba(224,64,251,0.25)',
-    background: 'rgba(224,64,251,0.08)', color: '#e040fb',
-    fontSize: 16, fontWeight: 700, cursor: 'pointer',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-  },
+  // ── Alerts
+  alertBanner: { display: 'flex', alignItems: 'center', gap: 8, padding: '11px 16px', borderRadius: 10, fontSize: 13, fontWeight: 600, marginBottom: 16, background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)', color: '#fbbf24' },
+  alertLink:   { color: '#fbbf24', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', fontSize: 13, fontWeight: 600 },
 
-  purchaseSummary: {
-    display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 24,
-    background: 'linear-gradient(145deg,#120c22,#1a1030)',
-    border: '1px solid rgba(224,64,251,0.18)',
-    borderRadius: 14, padding: '18px 22px',
-    boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-  },
-  pSumItem:  { flex: '1 1 140px', display: 'flex', flexDirection: 'column', gap: 4 },
-  pSumLabel: { fontSize: 12, color: '#6a4890', marginBottom: 7, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6 },
-  pSumValue: { fontSize: 24, fontWeight: 800, color: '#f0e8ff', letterSpacing: -0.3 },
-
-  pendingList:    { display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 },
-  pendingBox:     { background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 12, padding: '16px 18px' },
+  // ── Pending
+  pendingList:    { display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 },
+  pendingBox:     { background: 'rgba(251,191,36,0.05)', border: '1px solid rgba(251,191,36,0.15)', borderRadius: 12, padding: '14px 16px' },
   pendingRow:     { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' },
-  pendingInfo:    { display: 'flex', flexDirection: 'column', gap: 4 },
-  pendingTitle:   { fontSize: 15, fontWeight: 700, color: '#f0e8ff' },
-  pendingEmail:   { fontSize: 13, color: '#8060a0' },
-  pendingDate:    { fontSize: 12, color: '#5a4080', marginTop: 2 },
+  pendingInfo:    { display: 'flex', flexDirection: 'column', gap: 3 },
+  pendingTitle:   { fontSize: 14, fontWeight: 700, color: '#f4eeff' },
+  pendingEmail:   { fontSize: 12.5, color: '#8a72c0' },
+  pendingDate:    { fontSize: 11.5, color: '#5a4490', marginTop: 1 },
   pendingActions: { display: 'flex', gap: 8, alignItems: 'center' },
+
+  // ── Purchase summary
+  purchaseSummary: { display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 20, background: 'linear-gradient(145deg,#110e28,#181430)', border: '1px solid rgba(124,58,237,0.15)', borderRadius: 14, padding: '16px 20px' },
+  pSumItem:  { flex: '1 1 130px', display: 'flex', flexDirection: 'column', gap: 4 },
+  pSumLabel: { fontSize: 10.5, color: '#5a4490', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.7 },
+  pSumValue: { fontSize: 22, fontWeight: 900, color: '#f4eeff', letterSpacing: -0.5, fontVariantNumeric: 'tabular-nums' },
+
+  // ── Tax rows
+  taxBox: { background: 'linear-gradient(145deg,#110e28,#181430)', border: '1px solid rgba(124,58,237,0.15)', borderRadius: 14, padding: '16px 20px', marginBottom: 16 },
+  taxRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: 13.5 },
+
+  // ── Misc
+  qtyBtn2:  { width: 28, height: 28, borderRadius: 7, border: '1px solid rgba(124,58,237,0.25)', background: 'rgba(124,58,237,0.08)', color: '#9f67fa', fontSize: 16, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
 };
