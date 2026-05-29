@@ -159,6 +159,11 @@ export default function GarageDashboard() {
   const toggleCustom = (c) => setSelCustoms(s=>{const n=new Set(s);n.has(c)?n.delete(c):n.add(c);return n;});
   const togglePaint  = (p) => setSelPaints(s=>{const n=new Set(s);n.has(p)?n.delete(p):n.add(p);return n;});
   const resetDevis   = () => { setClient({firstName:'',lastName:'',model:'',category:'Sport'}); setSelPerfs(new Set()); setSelCustoms(new Set()); setSelPaints(new Set()); setDevisNotes(''); setActiveSection('perfs'); setSelectedVehicle(null); setVehicleSearch(''); };
+  // ── Custom devis builder (client séparé) ─────────────────────────
+  const [clientCustom, setClientCustom] = useState({firstName:'',lastName:'',model:'',category:'Sport'});
+  const [activeCustomSection, setActiveCustomSection] = useState('customs');
+  const [customNotes, setCustomNotes]   = useState('');
+  const resetCustomDevis = () => { setClientCustom({firstName:'',lastName:'',model:'',category:'Sport'}); setSelCustoms(new Set()); setSelPaints(new Set()); setCustomNotes(''); setActiveCustomSection('customs'); };
 
   const submitDevis = async () => {
     if (!client.firstName && !client.lastName) return showToast('Indiquez un nom client',false);
@@ -172,6 +177,23 @@ export default function GarageDashboard() {
     })});
     setLoading(false);
     if(r.ok){showToast('Devis enregistré !');resetDevis();loadOverview();}
+    else showToast('Erreur enregistrement',false);
+  };
+
+  const submitCustomDevis = async () => {
+    if (!clientCustom.firstName && !clientCustom.lastName) return showToast('Indiquez un nom client',false);
+    if (customsTotal+paintsTotal===0) return showToast('Aucun article sélectionné',false);
+    setLoading(true);
+    const r = await fetch('/api/garage/devis',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      clientFirstName:clientCustom.firstName, clientLastName:clientCustom.lastName,
+      vehicleModel:clientCustom.model, vehicleCategory:clientCustom.category, vehicleSpawnId:'',
+      selectedPerformances:[],
+      selectedCustoms:[...selCustoms].map(c=>({type:c,price:CUSTOM_PRICES[c]||0})),
+      selectedPaints:[...selPaints].map(p=>{let price=0;for(const g of Object.values(PAINT_GROUPS)){if(g[p]){price=g[p];break;}}return{type:p,price};}),
+      perfsTotal:0,customsTotal,paintsTotal,grandTotal:customsTotal+paintsTotal,notes:customNotes,
+    })});
+    setLoading(false);
+    if(r.ok){showToast('Devis enregistré !');resetCustomDevis();loadOverview();}
     else showToast('Erreur enregistrement',false);
   };
 
@@ -207,12 +229,13 @@ export default function GarageDashboard() {
   if (!session) return null;
 
   const TABS=[
-    {key:'overview', label:'📊 Vue d\'ensemble'},
-    {key:'devis',    label:'🔧 Nouveau Devis'},
-    {key:'registre', label:'📋 Registre'},
-    {key:'depenses', label:'🛒 Dépenses'},
-    {key:'employes', label:'👥 Employés'},
-    {key:'compte',   label:'👤 Mon Compte'},
+    {key:'overview',    label:'📊 Vue d\'ensemble'},
+    {key:'devis-perf',  label:'🔧 Devis Perf'},
+    {key:'devis-custom',label:'🎨 Devis Custom'},
+    {key:'registre',    label:'📋 Registre'},
+    {key:'depenses',    label:'🛒 Dépenses'},
+    {key:'employes',    label:'👥 Employés'},
+    {key:'compte',      label:'👤 Mon Compte'},
   ];
 
   // ── Styles communs ────────────────────────────────────────────────
@@ -355,10 +378,10 @@ export default function GarageDashboard() {
           </div>
         )}
 
-        {/* ══ NOUVEAU DEVIS ══ */}
-        {tab==='devis' && (
+        {/* ══ DEVIS PERF ══ */}
+        {tab==='devis-perf' && (
           <div>
-            <h2 style={{fontSize:24,fontWeight:700,color:'#f0e8ff',marginBottom:22}}>Nouveau Devis</h2>
+            <h2 style={{fontSize:24,fontWeight:700,color:'#f0e8ff',marginBottom:22}}>🔧 Devis Performance</h2>
             <div style={{display:'flex',gap:24,alignItems:'flex-start',flexWrap:'wrap'}}>
               <div style={{flex:3,minWidth:340}}>
                 {/* Client */}
@@ -415,11 +438,9 @@ export default function GarageDashboard() {
                 </div>
                 {/* Section tabs */}
                 <div style={{display:'flex',gap:8,marginBottom:16}}>
-                  {[['perfs','🔧 Performances',selPerfs.size],['customs','🎨 Customs',selCustoms.size],['paints','💅 Peintures',selPaints.size]].map(([key,label,count])=>(
-                    <button key={key} onClick={()=>setActiveSection(key)} style={{padding:'10px 18px',borderRadius:10,border:activeSection===key?'2px solid #e040fb':'1px solid rgba(224,64,251,0.2)',background:activeSection===key?'rgba(224,64,251,0.12)':'rgba(255,255,255,0.03)',color:activeSection===key?'#f0e8ff':'#5a4080',fontWeight:600,fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',gap:8}}>
-                      {label}{count>0&&<span style={{background:'#e040fb',color:'#fff',borderRadius:'50%',width:20,height:20,fontSize:11,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center'}}>{count}</span>}
-                    </button>
-                  ))}
+                  <div style={{padding:'10px 18px',borderRadius:10,border:'2px solid #e040fb',background:'rgba(224,64,251,0.12)',color:'#f0e8ff',fontWeight:600,fontSize:13,display:'flex',alignItems:'center',gap:8}}>
+                    🔧 Performances{selPerfs.size>0&&<span style={{background:'#e040fb',color:'#fff',borderRadius:'50%',width:20,height:20,fontSize:11,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center'}}>{selPerfs.size}</span>}
+                  </div>
                 </div>
                 {/* Performances */}
                 {activeSection==='perfs' && (
@@ -515,7 +536,113 @@ export default function GarageDashboard() {
                     </div>
                   )}
                   <div style={{display:'flex',flexDirection:'column',gap:10,marginBottom:16}}>
-                    {[['🔧 Performances',selPerfs.size,perfsTotal],['🎨 Customs',selCustoms.size,customsTotal],['💅 Peintures',selPaints.size,paintsTotal]].map(([lbl,cnt,tot])=>(
+                    <div style={{display:'flex',justifyContent:'space-between',fontSize:14,color:'#c0a0d8'}}>
+                      <span>🔧 Performances <span style={{color:'#6a4890'}}>({selPerfs.size})</span></span>
+                      <strong style={{color:perfsTotal>0?'#f0e8ff':'#3a2060'}}>{fmt(perfsTotal)}</strong>
+                    </div>
+                  </div>
+                  <div style={{borderTop:'2px solid rgba(251,191,36,0.2)',paddingTop:16,marginBottom:20,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                    <span style={{fontSize:15,color:'#d0b8f8',fontWeight:600}}>TOTAL</span>
+                    <span style={{fontSize:30,fontWeight:900,color:'#fbbf24',letterSpacing:-1}}>{fmt(perfsTotal)}</span>
+                  </div>
+                  {[...selPerfs].length>0&&(<div style={{marginBottom:10}}><div style={{fontSize:11,color:'#6a4890',fontWeight:700,textTransform:'uppercase',marginBottom:4}}>Performances</div>{[...selPerfs].map(p=><div key={p} style={{display:'flex',justifyContent:'space-between',fontSize:12,color:'#a080c8',padding:'2px 0'}}><span>{p}</span><span>{fmt(perfPrice(p))}</span></div>)}</div>)}
+
+
+                  <button onClick={submitDevis} disabled={loading||perfsTotal===0} style={{width:'100%',padding:'14px',background:perfsTotal===0?'#1a0c2e':'linear-gradient(135deg,#d97706,#fbbf24)',color:perfsTotal===0?'#3a2060':'#1a0c00',border:'none',borderRadius:12,cursor:perfsTotal===0?'not-allowed':'pointer',fontSize:15,fontWeight:900,marginBottom:10,boxShadow:perfsTotal>0?'0 4px 20px rgba(251,191,36,0.35)':'none'}}>
+                    {loading?'Enregistrement…':'✅ Valider le devis Perf'}
+                  </button>
+                  <button onClick={resetDevis} style={{width:'100%',padding:'10px',background:'none',color:'#5a4080',border:'1px solid rgba(224,64,251,0.18)',borderRadius:10,cursor:'pointer',fontSize:13}}>🗑️ Réinitialiser</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ══ DEVIS CUSTOM / PEINTURE ══ */}
+        {tab==='devis-custom' && (
+          <div>
+            <h2 style={{fontSize:24,fontWeight:700,color:'#f0e8ff',marginBottom:22}}>🎨 Devis Custom & Peinture</h2>
+            <div style={{display:'flex',gap:24,alignItems:'flex-start',flexWrap:'wrap'}}>
+              <div style={{flex:3,minWidth:340}}>
+                {/* Client */}
+                <div style={{...card,border:'1px solid rgba(251,191,36,0.2)',marginBottom:20}}>
+                  <div style={{fontSize:12,fontWeight:800,color:'#fbbf24',textTransform:'uppercase',letterSpacing:1,marginBottom:16}}>👤 Client & Véhicule</div>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:14}}>
+                    {[['Prénom','firstName','Michel'],['Nom','lastName','Dupont'],['Modèle','model','Sultan RS']].map(([lbl,key,ph])=>(
+                      <div key={key}>
+                        <label style={labelS}>{lbl}</label>
+                        <input value={clientCustom[key]} onChange={e=>setClientCustom(c=>({...c,[key]:e.target.value}))} style={inputS} placeholder={ph}/>
+                      </div>
+                    ))}
+                    <div>
+                      <label style={labelS}>Catégorie</label>
+                      <select value={clientCustom.category} onChange={e=>setClientCustom(c=>({...c,category:e.target.value}))} style={inputS}>
+                        {CATEGORIES.map(cat=><option key={cat} value={cat}>{cat}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                {/* Sous-onglets customs/peintures */}
+                <div style={{display:'flex',gap:8,marginBottom:16}}>
+                  {[['customs','🎨 Customs',selCustoms.size],['paints','💅 Peintures',selPaints.size]].map(([key,label,count])=>(
+                    <button key={key} onClick={()=>setActiveCustomSection(key)} style={{padding:'10px 18px',borderRadius:10,border:activeCustomSection===key?'2px solid #e040fb':'1px solid rgba(224,64,251,0.2)',background:activeCustomSection===key?'rgba(224,64,251,0.12)':'rgba(255,255,255,0.03)',color:activeCustomSection===key?'#f0e8ff':'#5a4080',fontWeight:600,fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',gap:8}}>
+                      {label}{count>0&&<span style={{background:'#e040fb',color:'#fff',borderRadius:'50%',width:20,height:20,fontSize:11,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center'}}>{count}</span>}
+                    </button>
+                  ))}
+                </div>
+                {/* Customs */}
+                {activeCustomSection==='customs' && (
+                  <div style={card}>
+                    <div style={{fontSize:12,color:'#8060a0',marginBottom:16}}>Prix fixe — toutes catégories</div>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(175px,1fr))',gap:10}}>
+                      {Object.entries(CUSTOM_PRICES).map(([item,price])=>{
+                        const sel=selCustoms.has(item);
+                        return (<button key={item} onClick={()=>toggleCustom(item)} style={{background:sel?'linear-gradient(145deg,#1e0a30,#280d40)':'#120c22',border:sel?'2px solid #e040fb':'1px solid rgba(224,64,251,0.15)',borderRadius:10,padding:'12px 14px',cursor:'pointer',textAlign:'left'}}>
+                          <div style={{display:'flex',justifyContent:'space-between'}}><span style={{fontWeight:600,fontSize:13,color:sel?'#f0e8ff':'#c0a0d8'}}>{item}</span>{sel&&<span style={{color:'#e040fb'}}>✓</span>}</div>
+                          <div style={{fontSize:14,fontWeight:700,color:sel?'#e040fb':'#8060a0',marginTop:3}}>{fmt(price)}</div>
+                        </button>);
+                      })}
+                    </div>
+                  </div>
+                )}
+                {/* Peintures */}
+                {activeCustomSection==='paints' && (
+                  <div style={card}>
+                    {Object.entries(PAINT_GROUPS).map(([grp,items])=>(
+                      <div key={grp} style={{marginBottom:22}}>
+                        <div style={{fontSize:13,fontWeight:700,color:'#c084fc',marginBottom:10}}>{grp}</div>
+                        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))',gap:10}}>
+                          {Object.entries(items).map(([item,price])=>{
+                            const sel=selPaints.has(item);
+                            return (<button key={item} onClick={()=>togglePaint(item)} style={{background:sel?'linear-gradient(145deg,#1e0a30,#280d40)':'#120c22',border:sel?'2px solid #e040fb':'1px solid rgba(224,64,251,0.15)',borderRadius:10,padding:'12px 14px',cursor:'pointer',textAlign:'left'}}>
+                              <div style={{display:'flex',justifyContent:'space-between'}}><span style={{fontWeight:600,fontSize:13,color:sel?'#f0e8ff':'#c0a0d8'}}>{item}</span>{sel&&<span style={{color:'#e040fb'}}>✓</span>}</div>
+                              <div style={{fontSize:14,fontWeight:700,color:sel?'#e040fb':'#8060a0',marginTop:3}}>{fmt(price)}</div>
+                            </button>);
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{marginTop:16}}>
+                  <label style={labelS}>Notes (optionnel)</label>
+                  <textarea value={customNotes} onChange={e=>setCustomNotes(e.target.value)} rows={3} style={{...inputS,resize:'vertical'}} placeholder="Remarques, délai, demandes…"/>
+                </div>
+              </div>
+
+              {/* Récap sticky custom */}
+              <div style={{flex:'0 0 320px',minWidth:280,position:'sticky',top:80}}>
+                <div style={{background:'linear-gradient(145deg,#100820,#180c30)',border:'2px solid rgba(251,191,36,0.3)',borderRadius:18,padding:'24px',boxShadow:'0 8px 40px rgba(0,0,0,0.6)'}}>
+                  <div style={{fontSize:13,fontWeight:800,color:'#fbbf24',textTransform:'uppercase',letterSpacing:1,marginBottom:20}}>📄 Récapitulatif</div>
+                  {(clientCustom.firstName||clientCustom.lastName) && (
+                    <div style={{marginBottom:16,padding:'12px 14px',background:'rgba(255,255,255,0.04)',borderRadius:10}}>
+                      <div style={{fontSize:11,color:'#6a4890',fontWeight:700,textTransform:'uppercase',marginBottom:4}}>Client</div>
+                      <div style={{fontWeight:700,fontSize:15,color:'#f0e8ff'}}>{clientCustom.firstName} {clientCustom.lastName}</div>
+                      {clientCustom.model&&<div style={{fontSize:13,color:'#8060a0',marginTop:2}}>{clientCustom.model} · {clientCustom.category}</div>}
+                    </div>
+                  )}
+                  <div style={{display:'flex',flexDirection:'column',gap:10,marginBottom:16}}>
+                    {[['🎨 Customs',selCustoms.size,customsTotal],['💅 Peintures',selPaints.size,paintsTotal]].map(([lbl,cnt,tot])=>(
                       <div key={lbl} style={{display:'flex',justifyContent:'space-between',fontSize:14,color:'#c0a0d8'}}>
                         <span>{lbl} <span style={{color:'#6a4890'}}>({cnt})</span></span>
                         <strong style={{color:tot>0?'#f0e8ff':'#3a2060'}}>{fmt(tot)}</strong>
@@ -524,15 +651,14 @@ export default function GarageDashboard() {
                   </div>
                   <div style={{borderTop:'2px solid rgba(251,191,36,0.2)',paddingTop:16,marginBottom:20,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                     <span style={{fontSize:15,color:'#d0b8f8',fontWeight:600}}>TOTAL</span>
-                    <span style={{fontSize:30,fontWeight:900,color:'#fbbf24',letterSpacing:-1}}>{fmt(grandTotal)}</span>
+                    <span style={{fontSize:30,fontWeight:900,color:'#fbbf24',letterSpacing:-1}}>{fmt(customsTotal+paintsTotal)}</span>
                   </div>
-                  {[...selPerfs].length>0&&(<div style={{marginBottom:10}}><div style={{fontSize:11,color:'#6a4890',fontWeight:700,textTransform:'uppercase',marginBottom:4}}>Performances</div>{[...selPerfs].map(p=><div key={p} style={{display:'flex',justifyContent:'space-between',fontSize:12,color:'#a080c8',padding:'2px 0'}}><span>{p}</span><span>{fmt(perfPrice(p))}</span></div>)}</div>)}
                   {[...selCustoms].length>0&&(<div style={{marginBottom:10}}><div style={{fontSize:11,color:'#6a4890',fontWeight:700,textTransform:'uppercase',marginBottom:4}}>Customs</div>{[...selCustoms].map(c=><div key={c} style={{display:'flex',justifyContent:'space-between',fontSize:12,color:'#a080c8',padding:'2px 0'}}><span>{c}</span><span>{fmt(CUSTOM_PRICES[c]||0)}</span></div>)}</div>)}
                   {[...selPaints].length>0&&(<div style={{marginBottom:10}}><div style={{fontSize:11,color:'#6a4890',fontWeight:700,textTransform:'uppercase',marginBottom:4}}>Peintures</div>{[...selPaints].map(p=>{let pr=0;for(const g of Object.values(PAINT_GROUPS)){if(g[p]){pr=g[p];break;}}return<div key={p} style={{display:'flex',justifyContent:'space-between',fontSize:12,color:'#a080c8',padding:'2px 0'}}><span>{p}</span><span>{fmt(pr)}</span></div>;})}</div>)}
-                  <button onClick={submitDevis} disabled={loading||grandTotal===0} style={{width:'100%',padding:'14px',background:grandTotal===0?'#1a0c2e':'linear-gradient(135deg,#d97706,#fbbf24)',color:grandTotal===0?'#3a2060':'#1a0c00',border:'none',borderRadius:12,cursor:grandTotal===0?'not-allowed':'pointer',fontSize:15,fontWeight:900,marginBottom:10,boxShadow:grandTotal>0?'0 4px 20px rgba(251,191,36,0.35)':'none'}}>
-                    {loading?'Enregistrement…':'✅ Valider le devis'}
+                  <button onClick={submitCustomDevis} disabled={loading||(customsTotal+paintsTotal===0)} style={{width:'100%',padding:'14px',background:(customsTotal+paintsTotal)===0?'#1a0c2e':'linear-gradient(135deg,#d97706,#fbbf24)',color:(customsTotal+paintsTotal)===0?'#3a2060':'#1a0c00',border:'none',borderRadius:12,cursor:(customsTotal+paintsTotal)===0?'not-allowed':'pointer',fontSize:15,fontWeight:900,marginBottom:10,boxShadow:(customsTotal+paintsTotal)>0?'0 4px 20px rgba(251,191,36,0.35)':'none'}}>
+                    {loading?'Enregistrement…':'✅ Valider le devis Custom'}
                   </button>
-                  <button onClick={resetDevis} style={{width:'100%',padding:'10px',background:'none',color:'#5a4080',border:'1px solid rgba(224,64,251,0.18)',borderRadius:10,cursor:'pointer',fontSize:13}}>🗑️ Réinitialiser</button>
+                  <button onClick={resetCustomDevis} style={{width:'100%',padding:'10px',background:'none',color:'#5a4080',border:'1px solid rgba(224,64,251,0.18)',borderRadius:10,cursor:'pointer',fontSize:13}}>🗑️ Réinitialiser</button>
                 </div>
               </div>
             </div>
